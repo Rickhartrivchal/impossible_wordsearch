@@ -3,44 +3,55 @@ library(ggplot2)
 library(data.table)
 library(magrittr)
 
-how.many <- function(s,sb) {
+createInitialWordsearch <- function(w, h, word) {
+  # Creates an initial [h x w] wordsearch that the string word may or may not be in
+  draws <- unique(sample(strsplit(tolower(word),split = ""))[[1]])
+  return(
+    as.matrix(
+      data.frame(replicate(w,sample(draws,h,rep=T)))
+    )
+  )
+}
+
+howMany <- function(baseString,qString) {
   # count number of times a substring appears in a string
+  l <- nchar(qString)
   i <- 1
-  l <- nchar(sb)
   count <- 0
-  for (j in l : nchar(s)) {
-    new.s <- substr(s, i, j)
-    if (grepl(sb,new.s)==T) {
-      count <- count+1
+  for (j in l : nchar(baseString)) {
+    subString <- substr(baseString, i, j)
+    if (grepl(qString, subString) == T) {
+      count <- count + 1
     }
-    i <- i+1
+    i <- i + 1
   }
-  count
+  return(count)
 }
 
-f.diag <- function(df, pos.x, pos.y) {
-  # return "\"-direction diagonal
-  d <- row(df)-col(df)
-  q <- d[pos.x,pos.y] %>% as.character
-  diag_list <- split(df,d)
-  diag_at_pos <- diag_list[which(names(diag_list)==q)][[1]] %>%
-    paste(collapse="")
+fDiagRead <- function(df, pos_x, pos_y) {
+  # Return "\"-direction diagonal of wordsearch df at given coordinate
+  d <- row(df) - col(df)
+  q <- d[pos_x, pos_y] %>% as.character
+  diag_list   <- split(df, d)
+  diag_at_pos <- diag_list[which(names(diag_list) == q)][[1]] %>%
+    paste(collapse = "")
+  return(diag_at_pos)
+}
+
+
+bDiagRead <- function(df,pos_x,pos_y) {
+  # Return "/"-direction diagonal of ws at given coordinate
+  d <- (nrow(df) - row(df)) - col(df)
+  q <- d[pos_x, pos_y] %>% as.character
+  diag_list <- split(df, d)
+  diag_at_pos <- diag_list[which(names(diag_list) == q)][[1]] %>%
+    paste(collapse = "")
   diag_at_pos
 }
 
-
-b.diag <- function(df,pos.x,pos.y) {
-  # return "/"-direction diagonal 
-  d <- (nrow(df)-row(df))-col(df)
-  q <- d[pos.x,pos.y] %>% as.character
-  diag_list <- split(df,d)
-  diag_at_pos <- diag_list[which(names(diag_list)==q)][[1]] %>%
-    paste(collapse="")
-  diag_at_pos
-}
-
-other_way <- function(x) {
-  sapply(lapply(strsplit(x, NULL), rev), paste, collapse="")
+otherWay <- function(x) {
+  # Reverse a list of strings x
+  sapply(lapply(strsplit(x, NULL), rev), paste, collapse = "")
 }
 
 firstCut <- function(string, substring) {
@@ -70,25 +81,83 @@ countWsOccurs <- function(df, countWord) {
   
   horizs <- sapply(1 : h, FUN = function(x) paste(df[x,], collapse = ""))
   verts  <- sapply(1 : w, FUN = function(y) paste(df[, y], collapse = ""))
-  fdiags <- sapply(1 : h, FUN = function(x) f.diag(df, x, 1))
-  bdiags <- sapply(1 : h, FUN = function(x) b.diag(df, x, 1))
+  fDiags <- sapply(1 : h, FUN = function(x) fDiagRead(df, x, 1))
+  bdiags <- sapply(1 : h, FUN = function(x) bDiagRead(df, x, 1))
   
-  base <- c(horizs, verts, fdiags, bdiags)
-  base <- c(base, sapply(base, other_way))
+  base <- c(horizs, verts, fDiags, bdiags)
+  base <- c(base, sapply(base, otherWay))
   
   return(
     sum(sapply(base, countOccurs, substring = countWord))
   )
 }
 
+tallyWsOccurs <- function(df, countWord) {
+  
+  if (ncol(df) > nrow(df)) {
+    df <- t(df)
+  }
+  
+  w <- ncol(df)
+  h <- nrow(df)
+  
+  horizs <- sapply(1 : h, FUN = function(x) paste(df[x,], collapse = ""))
+  verts  <- sapply(1 : w, FUN = function(y) paste(df[, y], collapse = ""))
+  fDiags <- sapply(1 : h, FUN = function(x) fDiagRead(df, x, 1))
+  bDiags <- sapply(1 : h, FUN = function(x) bDiagRead(df, x, 1))
+  
+  baseList <- list(horizs = horizs, verts  = verts,
+                   fDiags = fDiags, bDiags = bDiags)
+  
+  lapply(names(baseList), FUN = function(stringType) { print(stringType);
+    offensiveHorizs <- baseList[[stringType]] %>%
+      data.table(string = ., type = stringType) %>%
+      .[, index := seq_len(.N)]
+  }) %>% rbindlist %>%
+    .[]
+  lapply(baseList, FUN = function(x) {
+    list(x, index = which(countOccurs(x, substring = badWord) > 0))
+  })
+  
+  offensiveCoordinatesByGroup <- function(offensiveList, qName, badWord) {
+      # offensiveList: baseList filtered to those rows that contain the bad word
+      # qName: one of "horizs", "verts", etc.
+      # qIndex: a number designating which element of baseList we want
+      # Coordinates for 
+      offGroup <- namedList[[qName]]
+     
+      if (qName == "horizs") {
+        offensiveIndices <- sapply(offGroup, 
+                                   FUN = function(x) {
+                                     countOccurs(x, substring = badWord) > 0
+                                   })
+        offGroup_xs <- offGroup[]
+      }
+    }
+  }
+  
+  base <- c(horizs, verts, fDiags, bdiags)
+  base <- c(base, sapply(base, otherWay))
+  
+  return(
+    sum(sapply(base, countOccurs, substring = countWord))
+  )
+}
+
+if (FALSE) {
+  ws <- createInitialWordsearch(w = 5, h = 6, word = "camp")
+  ok1 <- countWsOccurs(ws, "cam")
+  ok2 <- where.is.it(ws, "cam")
+}
+
 is.it.in.f <- function(df, word) {
   horizs <- sapply(1 : nrow(df), FUN = function(x) paste(df[x,], collapse = ""))
   verts  <- sapply(1 : ncol(df), FUN = function(y) paste(df[, y], collapse = ""))
-  fdiags <- sapply(1 : nrow(df), FUN = function(x) f.diag(df, x, 1))
-  bdiags <- sapply(1 : nrow(df), FUN = function(x) b.diag(df, x, 1))
+  fDiagReads <- sapply(1 : nrow(df), FUN = function(x) fDiagRead(df, x, 1))
+  bdiags <- sapply(1 : nrow(df), FUN = function(x) bDiagRead(df, x, 1))
   
-  base <- c(horizs, verts, fdiags, bdiags)
-  base <- c(base, sapply(base, other_way))
+  base <- c(horizs, verts, fDiagReads, bdiags)
+  base <- c(base, sapply(base, otherWay))
   
   sum(sapply(base, grepl, pattern = word))
 }
@@ -100,27 +169,27 @@ is.it.in <- function(df,word,i,j) {
   }
   horiz <- paste(df[i,],collapse="")
   vert <- paste(df[,j],collapse="")
-  diag1 <- f.diag(df,i,j)
-  diag2 <- b.diag(df,i,j)
+  diag1 <- fDiagRead(df,i,j)
+  diag2 <- bDiagRead(df,i,j)
   base <- c(horiz,vert,diag1,diag2)
-  base <- c(base,sapply(base,other_way))
+  base <- c(base,sapply(base,otherWay))
   sum(sapply(base,grepl,pattern=word))
 }
 
-how.many.ws <- function(df,word,i,j) {
+howMany.ws <- function(df,word,i,j) {
   # count how many times a word appears in a ws off a given index
   if (i>nrow(df) || j>ncol(df)) {
     stop("index exceeds df dimensions")
   }
   horiz <- paste(df[i,],collapse="")
   vert <- paste(df[,j],collapse="")
-  diag1 <- f.diag(df,i,j)
-  diag2 <- b.diag(df,i,j)
+  diag1 <- fDiagRead(df,i,j)
+  diag2 <- bDiagRead(df,i,j)
   base <- c(horiz,vert,diag1,diag2)
-  base <- c(base,sapply(base,other_way))
+  base <- c(base,sapply(base,otherWay))
   count <- 0
   for (i in 1:length(base)) {
-    count <- count+how.many(base[i],word)
+    count <- count+howMany(base[i],word)
   }
   count
 }
@@ -136,7 +205,7 @@ where.is.it <- function(df,word) {
       df.tmp[i, j] <- NA
       if (is.it.in(df, word, i, j) > 0) {
          # test if this index lies along a line that contains word
-        if (how.many.ws(df.tmp, word, i, j) != how.many.ws(df,word,i,j)) {
+        if (howMany.ws(df.tmp, word, i, j) != howMany.ws(df,word,i,j)) {
           # test to see if index contains element of word
         M <- rbind(M, c(i, j))
         }
@@ -147,22 +216,13 @@ where.is.it <- function(df,word) {
   M
 }
 
-ws.init <- function(w, h, word) {
-  # gives an initial wordsearch the word may or may not be in
-  draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  K <- data.frame(replicate(w,sample(draws,h,rep=T)))
-  as.matrix(K)
-}
-
-
-
 
 imp_ws_slow <- function(w,h,word) {
   i <- 1 # iteration counter
   if ((nchar(word)>w) & nchar(word)>h) {
     stop("word too long to uphold feasability facade in given dimensions")
   } else {
-  ws <- ws.init(h,w,word) # generate initial word search, may or may not contain word
+  ws <- createInitialWordsearch(h,w,word) # generate initial word search, may or may not contain word
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   tdo <- nrow(where.is.it(ws,word)) # count number of bad indices
   while(tdo>0) {
@@ -206,7 +266,7 @@ imp_ws_less_slow <- function(w,h,word) {
     stop("word too long to uphold feasability facade in given dimensions")
   }
   
-  ws <- ws.init(w, h, word) # generate initial word search, may or may not contain word
+  ws <- createInitialWordsearch(w, h, word) # generate initial word search, may or may not contain word
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   tdo <- nrow(where.is.it(ws,word)) # count number of bad indices
   while(tdo > 0) {
@@ -247,7 +307,7 @@ imp_ws_less_slow <- function(w,h,word) {
 
 imp_ws <- function(n,p,word) {
   i <- 1
-  ws <- ws.init(n,p,word)
+  ws <- createInitialWordsearch(n,p,word)
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   i <- 1
   j <- 1
