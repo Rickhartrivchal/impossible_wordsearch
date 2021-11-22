@@ -1,7 +1,9 @@
 library(genalg)
 library(ggplot2)
 library(data.table)
+library(stringr)
 library(magrittr)
+library(foreach)
 
 createInitialWordsearch <- function(w, h, word) {
   # Creates an initial [h x w] wordsearch that the string word may or may not be in
@@ -13,207 +15,65 @@ createInitialWordsearch <- function(w, h, word) {
   )
 }
 
-howMany <- function(baseString,qString) {
-  # count number of times a substring appears in a string
-  l <- nchar(qString)
-  i <- 1
-  count <- 0
-  for (j in l : nchar(baseString)) {
-    subString <- substr(baseString, i, j)
-    if (grepl(qString, subString) == T) {
-      count <- count + 1
+wordLocations <- function(ws, word) {
+  # outputs a data.table of x and y matrix coordinates where word appears
+  # TODO: testing, "wowow" for word "wow", test to make sure word is complete
+  
+  matrixMaps <- list(horiz_mat  = nrow(ws) - row(ws),
+                     vert_mat   = ncol(ws) - col(ws),
+                     f_diag_mat = row(ws)  - col(ws),
+                     b_diag_mat = nrow(ws) - row(ws) - col(ws))
+  
+  wordCoordsFromMatrixMap <- function(matrixMap, wordSearch, word) {
+    string_list <- split(wordSearch, matrixMap) %>% lapply(FUN = paste0, collapse = "")
+    occurs      <- grep(pattern = word, x = string_list)
+    x_list      <- split(row(wordSearch), matrixMap)[occurs]
+    y_list      <- split(col(wordSearch), matrixMap)[occurs]
+    words_list  <- string_list[occurs]
+    starts_list <- str_locate_all(string = words_list, pattern = word) %>%
+      lapply(function(x) x[, 1])
+    
+    indicesFromStarts <- function(startsVector, wordLength) {
+      return(
+        startsVector %>% 
+          lapply(function(x) (x : (x + wordLength - 1))) %>%
+          unlist %>% 
+          unique
+      )
     }
-    i <- i + 1
-  }
-  return(count)
-}
-
-fDiagRead <- function(df, pos_x, pos_y) {
-  # Return "\"-direction diagonal of wordsearch df at given coordinate
-  d <- row(df) - col(df)
-  q <- d[pos_x, pos_y] %>% as.character
-  diag_list   <- split(df, d)
-  diag_at_pos <- diag_list[which(names(diag_list) == q)][[1]] %>%
-    paste(collapse = "")
-  return(diag_at_pos)
-}
-
-
-bDiagRead <- function(df,pos_x,pos_y) {
-  # Return "/"-direction diagonal of ws at given coordinate
-  d <- (nrow(df) - row(df)) - col(df)
-  q <- d[pos_x, pos_y] %>% as.character
-  diag_list <- split(df, d)
-  diag_at_pos <- diag_list[which(names(diag_list) == q)][[1]] %>%
-    paste(collapse = "")
-  diag_at_pos
-}
-
-otherWay <- function(x) {
-  # Reverse a list of strings x
-  sapply(lapply(strsplit(x, NULL), rev), paste, collapse = "")
-}
-
-firstCut <- function(string, substring) {
-  # Cuts at first occurrence, returns index or zero if doesnt occur
-  cutString <- unlist(strsplit(substring(string, 1), substring))
-  if(length(cutString) < 2 ) {
-    return(0)
-  } else { 
-    return(nchar(cutString[1]) + 1)
-  }
-}
-
-countOccurs <- function(string, substring) {
-  cutString <- unlist(strsplit(substring(string, 1), substring))
-  return(
-    length(cutString) - 1 + (string == substring)
-  )
-}
-
-countWsOccurs <- function(df, countWord) {
-  if (ncol(df) > nrow(df)) {
-    df <- t(df)
+    
+    # Filter down to when the word occurs in each string
+    index_list   <- lapply(starts_list, indicesFromStarts, wordLength = nchar(word))
+    x_list_index <- mapply(function(x, i) x[i], x = x_list, i = index_list) %>%
+      unlist %>% as.numeric # as.numeric() call keeps columns intact when 0 rows
+    y_list_index <- mapply(function(y, i) y[i], y = y_list, i = index_list) %>%
+      unlist %>% as.numeric()
+    output <- data.table(x = x_list_index,
+                         y = y_list_index) %>% unique %>%
+      .[order(x, y)]
+    return(output)
   }
   
-  w <- ncol(df)
-  h <- nrow(df)
+  reversedWord <- strsplit(word, "") %>% `[[`(1) %>% rev %>% paste(collapse = "")
   
-  horizs <- sapply(1 : h, FUN = function(x) paste(df[x,], collapse = ""))
-  verts  <- sapply(1 : w, FUN = function(y) paste(df[, y], collapse = ""))
-  fDiags <- sapply(1 : h, FUN = function(x) fDiagRead(df, x, 1))
-  bdiags <- sapply(1 : h, FUN = function(x) bDiagRead(df, x, 1))
-  
-  base <- c(horizs, verts, fDiags, bdiags)
-  base <- c(base, sapply(base, otherWay))
-  
-  return(
-    sum(sapply(base, countOccurs, substring = countWord))
-  )
+  output <- rbind(
+    lapply(matrixMaps, 
+           FUN = wordCoordsFromMatrixMap, wordSearch = ws, word = word) %>%
+      rbindlist,
+    lapply(matrixMaps, 
+           FUN = wordCoordsFromMatrixMap, wordSearch = ws, word = reversedWord) %>%
+      rbindlist
+  ) %>%
+    unique
 }
 
-tallyWsOccurs <- function(df, countWord) {
-  
-  if (ncol(df) > nrow(df)) {
-    df <- t(df)
-  }
-  
-  w <- ncol(df)
-  h <- nrow(df)
-  
-  horizs <- sapply(1 : h, FUN = function(x) paste(df[x,], collapse = ""))
-  verts  <- sapply(1 : w, FUN = function(y) paste(df[, y], collapse = ""))
-  fDiags <- sapply(1 : h, FUN = function(x) fDiagRead(df, x, 1))
-  bDiags <- sapply(1 : h, FUN = function(x) bDiagRead(df, x, 1))
-  
-  baseList <- list(horizs = horizs, verts  = verts,
-                   fDiags = fDiags, bDiags = bDiags)
-  
-  lapply(names(baseList), FUN = function(stringType) { print(stringType);
-    offensiveHorizs <- baseList[[stringType]] %>%
-      data.table(string = ., type = stringType) %>%
-      .[, index := seq_len(.N)]
-  }) %>% rbindlist %>%
-    .[]
-  lapply(baseList, FUN = function(x) {
-    list(x, index = which(countOccurs(x, substring = badWord) > 0))
-  })
-  
-  offensiveCoordinatesByGroup <- function(offensiveList, qName, badWord) {
-      # offensiveList: baseList filtered to those rows that contain the bad word
-      # qName: one of "horizs", "verts", etc.
-      # qIndex: a number designating which element of baseList we want
-      # Coordinates for 
-      offGroup <- namedList[[qName]]
-     
-      if (qName == "horizs") {
-        offensiveIndices <- sapply(offGroup, 
-                                   FUN = function(x) {
-                                     countOccurs(x, substring = badWord) > 0
-                                   })
-        offGroup_xs <- offGroup[]
-      }
-    }
-  }
-  
-  base <- c(horizs, verts, fDiags, bdiags)
-  base <- c(base, sapply(base, otherWay))
-  
-  return(
-    sum(sapply(base, countOccurs, substring = countWord))
-  )
-}
 
 if (FALSE) {
-  ws <- createInitialWordsearch(w = 5, h = 6, word = "camp")
-  ok1 <- countWsOccurs(ws, "cam")
-  ok2 <- where.is.it(ws, "cam")
-}
-
-is.it.in.f <- function(df, word) {
-  horizs <- sapply(1 : nrow(df), FUN = function(x) paste(df[x,], collapse = ""))
-  verts  <- sapply(1 : ncol(df), FUN = function(y) paste(df[, y], collapse = ""))
-  fDiagReads <- sapply(1 : nrow(df), FUN = function(x) fDiagRead(df, x, 1))
-  bdiags <- sapply(1 : nrow(df), FUN = function(x) bDiagRead(df, x, 1))
-  
-  base <- c(horizs, verts, fDiagReads, bdiags)
-  base <- c(base, sapply(base, otherWay))
-  
-  sum(sapply(base, grepl, pattern = word))
-}
-
-is.it.in <- function(df,word,i,j) {
-  # test if a word is in a matrix of letters anchored to input index
-  if (i>nrow(df) || j>ncol(df)) {
-    stop("index exceeds df dimensions")
-  }
-  horiz <- paste(df[i,],collapse="")
-  vert <- paste(df[,j],collapse="")
-  diag1 <- fDiagRead(df,i,j)
-  diag2 <- bDiagRead(df,i,j)
-  base <- c(horiz,vert,diag1,diag2)
-  base <- c(base,sapply(base,otherWay))
-  sum(sapply(base,grepl,pattern=word))
-}
-
-howMany.ws <- function(df,word,i,j) {
-  # count how many times a word appears in a ws off a given index
-  if (i>nrow(df) || j>ncol(df)) {
-    stop("index exceeds df dimensions")
-  }
-  horiz <- paste(df[i,],collapse="")
-  vert <- paste(df[,j],collapse="")
-  diag1 <- fDiagRead(df,i,j)
-  diag2 <- bDiagRead(df,i,j)
-  base <- c(horiz,vert,diag1,diag2)
-  base <- c(base,sapply(base,otherWay))
-  count <- 0
-  for (i in 1:length(base)) {
-    count <- count+howMany(base[i],word)
-  }
-  count
-}
-
-
-
-where.is.it <- function(df,word) {
-  # returns M x 2 df where each row is an index that contains the word
-  M <- data.frame(matrix(vector(), 0, 2))
-  for (i in 1 : nrow(df)) {
-    for (j in 1 : ncol(df)) {
-      df.tmp <- df
-      df.tmp[i, j] <- NA
-      if (is.it.in(df, word, i, j) > 0) {
-         # test if this index lies along a line that contains word
-        if (howMany.ws(df.tmp, word, i, j) != howMany.ws(df,word,i,j)) {
-          # test to see if index contains element of word
-        M <- rbind(M, c(i, j))
-        }
-      }
-    }
-  }
-  
-  M
+  word <- "wow"
+  w <- 5
+  h <- 5
+  ws <- createInitialWordsearch(w = w, h = h, word = word)
+  microbenchmark(ok4 <- wordLocations(ws, word))
 }
 
 
@@ -224,11 +84,12 @@ imp_ws_slow <- function(w,h,word) {
   } else {
   ws <- createInitialWordsearch(h,w,word) # generate initial word search, may or may not contain word
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  tdo <- nrow(where.is.it(ws,word)) # count number of bad indices
-  while(tdo>0) {
+  coordDt <- wordLocations(ws, word)
+  tdo <- coordDt[, .N] # count number of bad indices
+  while(tdo > 0) {
     # systematically change the values of the indices present in swap spots 
     # to maximize the descent of nrow of swap.spots
-    swap.spots <- where.is.it(ws,word) 
+    swap.spots <- coordDt
     one.swap.list <- list(ws) # base template for what the current iteration's best ws is
     z <- 1
     one.swap.index <- c()
@@ -242,7 +103,7 @@ imp_ws_slow <- function(w,h,word) {
                swap.spots[i,2]] <- new.draws[j] # and plug into ws.df.tmp
         one.swap.list[[z]] <- df.tmp;z <- z+1 # store new ws in one.swap.list
         one.swap.index <- c(one.swap.index, # store new score in one.swap.index
-                            nrow(where.is.it(df.tmp,word)))
+                            nrow(wordLocations(df.tmp,word)))
       }
     }
     which.is.best <- which(one.swap.index== 
@@ -251,13 +112,50 @@ imp_ws_slow <- function(w,h,word) {
     ws <- one.swap.list[[which.is.best]] # thats the new word search
     i <- i+1
     print(paste0("After ",i," iterations objective not satisfied at ",
-                 nrow(where.is.it(ws,word))," indeces"))
+                 nrow(wordLocations(ws,word))," indeces"))
     print(ws)
-    tdo <- nrow(where.is.it(ws,word))
+    tdo <- nrow(wordLocations(ws,word))
     
   }
   }
   ws
+}
+
+shuffleOnCoords <- function(ws, coords, draws) {
+  coords[, new_sample := sample(draws, .N, replace = TRUE)]
+  for (i in 1 : nrow(coords)) {
+    ws[coords[i, x], coords[i, y]] <- coords[i, new_sample]
+  }
+  return(ws)
+}
+
+imp_ws_juggle <- function(w,h,word) {
+  populationSize <- 10
+  
+  i <- 1
+  ws <- createInitialWordsearch(w, h, word)
+  draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
+  coordDt <- wordLocations(ws, word)
+  while (nrow(coordDt) > 0 & i < 100) {
+    # re-shuffle the remaining coords
+    coordDt <- wordLocations(ws, word)
+    
+    print(paste0("Iteration ", i, ". Word found at ", nrow(coordDt), " locations."))
+    
+    wsPopulation <- list()
+    for (i in 1 : populationSize) {
+      wsPopulation[[i]] <- shuffleOnCoords(ws, coordDt, draws)
+    }
+    wsSize <- lapply(wsPopulation, FUN = wordLocations, word = word) %>%
+      lapply(FUN = nrow)
+    
+    # Pick the best one and move on
+    ws <- wsPopulation[[which.min(wsSize)]]
+    coordDt <- wordLocations(ws, word)
+    print(ws)
+    i <- i + 1
+  }
+  return(ws)
 }
 
 imp_ws_less_slow <- function(w,h,word) {
@@ -268,27 +166,27 @@ imp_ws_less_slow <- function(w,h,word) {
   
   ws <- createInitialWordsearch(w, h, word) # generate initial word search, may or may not contain word
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  tdo <- nrow(where.is.it(ws,word)) # count number of bad indices
+  tdo <- nrow(wordLocations(ws,word)) # count number of bad indices
   while(tdo > 0) {
     # systematically change the values of the indices present in swap spots 
     # to maximize the descent of nrow of swap.spots
-    swap.spots <- where.is.it(ws,word) 
+    swap.spots <- wordLocations(ws,word) 
     one.swap.list <- list(ws) # base template for what the current iteration's best ws is
     z <- 1
     one.swap.index <- c()
     i <- 1
     get_this_lower <- tdo
     for (i in 1:nrow(swap.spots)) { # for every swap spot...
-      current.character <- ws[swap.spots[i,1],
-                              swap.spots[i,2]]
+      current.character <- ws[swap.spots[i,x],
+                              swap.spots[i,y]]
       new.draws <- draws[-which(draws==current.character)]
       for (j in 1:length(new.draws)) { # ...try every character in new.draws
         df.tmp <- ws
-        df.tmp[swap.spots[i,1],
-               swap.spots[i,2]] <- new.draws[j] # and plug into ws.df.tmp
+        df.tmp[swap.spots[i,x],
+               swap.spots[i,y]] <- new.draws[j] # and plug into ws.df.tmp
         one.swap.list[[z]] <- df.tmp;z <- z+1 # store new ws in one.swap.list
         one.swap.index <- c(one.swap.index, # store new score in one.swap.index
-                            nrow(where.is.it(df.tmp,word)))
+                            nrow(wordLocations(df.tmp,word)))
       }
     }
     which.is.best <- which(one.swap.index== 
@@ -297,9 +195,9 @@ imp_ws_less_slow <- function(w,h,word) {
     ws <- one.swap.list[[which.is.best]] # thats the new word search
     i <- i+1
     print(paste0("After ",i," iterations objective not satisfied at ",
-                 nrow(where.is.it(ws,word))," indeces"))
+                 nrow(wordLocations(ws,word))," indeces"))
     print(ws)
-    tdo <- nrow(where.is.it(ws,word))
+    tdo <- nrow(wordLocations(ws,word))
     
   }
   ws
@@ -311,15 +209,15 @@ imp_ws <- function(n,p,word) {
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   i <- 1
   j <- 1
-  while(nrow(where.is.it(ws,word))>0) {
-    swap.spots <- where.is.it(ws,word)
+  while(nrow(wordLocations(ws,word))>0) {
+    swap.spots <- wordLocations(ws,word)
     current.character <- ws[swap.spots[i,1],swap.spots[i,2]]
     new.draws <- draws[-which(draws==current.character)]
     ws.tmp <- ws
     ws.tmp[swap.spots[i,1],swap.spots[i,2]] <- new.draws[j]
-    if (nrow(where.is.it(ws.tmp,word))<nrow(swap.spots)) {
+    if (nrow(wordLocations(ws.tmp,word))<nrow(swap.spots)) {
       print(paste0("After ",i," iterations objective not satisfied at ",
-                   nrow(where.is.it(ws,word))," indeces swap made at",
+                   nrow(wordLocations(ws,word))," indeces swap made at",
                    swap.spots[i,1]," ",swap.spots[i,2]))
       print(ws.tmp)
       i <- i+1
@@ -345,7 +243,6 @@ imp_ws <- function(n,p,word) {
   }
 }
 
-string <- rbga.results$population[1,]
 evaluateWs <- function(string = c(), w = inW, h = inH, word = inWord) {
   
   ppTolerance <- 0.25 # maximum %-points diference of each letter's frequency 
@@ -420,10 +317,10 @@ if (FALSE) {
   plot(rbga.results, type="hist")
   plot(rbga.results, type="vars")
   
-  # system.time(where.is.it(df = df, word = "kook"))
-  # systmem.time(where.is.it.f(df = df, word = "kook"))
+  # system.time(wordLocations(df = df, word = "kook"))
+  # systmem.time(wordLocations.f(df = df, word = "kook"))
   
-  where.is.it.f <- function(df, word) {
+  wordLocations.f <- function(df, word) {
     M <- data.frame(matrix(vector(), 0, 2))
     totalOccurs <- is.it.in()
     for (i in 1 : nrow(df)) {
