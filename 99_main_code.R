@@ -9,17 +9,16 @@ buildInitialWordsearch <- function(w, h, word) {
   draws <- unique(sample(strsplit(tolower(word), split = ""))[[1]])
   return(
     as.matrix(
-      data.frame(replicate(w, sample(draws, h, rep = T)))
+      replicate(w, sample(draws, h, rep = T))
     )
   )
 }
 
 addWordToWs <- function(ws, word) {
   # Randomly adds word to the wordsearch
-  # - Doesn't test for single occurrence
-  # - random components: 1. 50/50 chance it will be forwards or backwards
-  #                      2. chance it will show up vert/horizontal/diag depends on dimensions
-  #                         but should be more or less even distribution
+  # 1. 50/50 chance it will be forwards or backwards
+  # 2. ~25% chance it will show up vert/horizontal/fdiag/bdiag depends on dimensions
+  #    but should be more or less even distribution
   
   # Generate all maps
   matrixMaps <- list(horiz_mat  = nrow(ws) - row(ws),
@@ -45,7 +44,7 @@ addWordToWs <- function(ws, word) {
     rbindlist %>%
     .[, w := nchar(old_string)]
   
-  # Flip a coin for reversing word and get characters
+  # Flip a coin for reversing word's characters (wordChars)
   wordChars <- strsplit(word, "")[[1]]
   if (round(runif(1)) == 1) {wordChars <- rev(wordChars)}
   
@@ -68,7 +67,7 @@ addWordToWs <- function(ws, word) {
   
 }
 
-wordLocations <- function(ws, word) {
+findWord <- function(ws, word) {
   # outputs a data.table of x and y matrix coordinates where word appears
   # TODO: testing, "wowow" for word "wow", test to make sure word is complete
   
@@ -146,10 +145,11 @@ buildImpossibleWs <- function(w,h,word) {
   iter_n <- 1
   
   redrawCoords <- function(ws, coords, draws) {
-    # outputs new ws with the input coords resampled from (single character vector) draws
+    # Outputs new ws with the values in coords resampled from (single character vector) draws
     maxRedraws <- 50
+    redraws <- min(maxRedraws, nrow(coords))
     
-    for (i in 1 : min(maxRedraws, nrow(coords))) {
+    for (i in 1 : redraws) {
       ws[coords[i, x], coords[i, y]] <- sample(draws, 1)
     }
     return(ws)
@@ -157,21 +157,21 @@ buildImpossibleWs <- function(w,h,word) {
   
   ws <- buildInitialWordsearch(w, h, word)
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  coordDt <- wordLocations(ws, word)
+  coordDt <- findWord(ws, word)
   while (nrow(coordDt) > 0 & iter_n < 100) {
     # re-shuffle the remaining coords
-    coordDt <- wordLocations(ws, word)
+    coordDt <- findWord(ws, word)
     
     # print(paste0("Iteration ", iter_n, ". Word found at ", nrow(coordDt), " locations."))
     wsPopulation <- foreach(i = iter(1 : populationSize)) %do% {
       redrawCoords(ws, coordDt, draws)
     }
-    wsSize <- lapply(wsPopulation, FUN = wordLocations, word = word) %>%
+    wsSize <- lapply(wsPopulation, FUN = findWord, word = word) %>%
       lapply(FUN = nrow)
     
     # Pick the best one and move on
     ws <- wsPopulation[[which.min(wsSize)]]
-    coordDt <- wordLocations(ws, word)
+    coordDt <- findWord(ws, word)
     # print(ws)
     iter_n <- iter_n + 1
   }
@@ -195,7 +195,7 @@ buildHardWs <- function(w, h, word) {
   # Initialize an impossible word search
   ws      <- buildImpossibleWs(w, h, word)
   draws   <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  coordDt <- wordLocations(ws, word)
+  coordDt <- findWord(ws, word)
   
   # The while loop will keep going until it shows up exactly once
   while (nrow(coordDt) != nchar(word)) {
@@ -205,20 +205,20 @@ buildHardWs <- function(w, h, word) {
     if (nrow(coordDt) == 0) {
       # ...force the word in
       ws <- addWordToWs(ws, word)
-      coordDt <- wordLocations(ws, word)
+      coordDt <- findWord(ws, word)
     } else {
     # Otherwise you accidentally made it occur more than once 
     # Find the best solution be finding which.min()[nchar > 0]
       wsPopulation <- foreach(i = iter(1 : populationSize)) %do% {
         redrawCoords(ws, coordDt, draws)
       }
-      wsSize <- lapply(wsPopulation, FUN = wordLocations, word = word) %>%
+      wsSize <- lapply(wsPopulation, FUN = findWord, word = word) %>%
         lapply(FUN = nrow)
       
       # Pick the best one and move on
       ws <- wsPopulation[[which.min(ifelse(wsSize == 0, 999, wsSize))]]
     }
-    coordDt <- wordLocations(ws, word)
+    coordDt <- findWord(ws, word)
     # print(ws)
     iter_n <- iter_n + 1
   }
@@ -231,12 +231,12 @@ if (FALSE) {
   sapply(list.files(".", full.names = TRUE), FUN = function(x) 
     if (grepl(".R$", toupper(x))) {source(x)})
   
-  word <- "wow"
-  w    <- 15
-  h    <- 15
+  word <- "lex"
+  w    <- 5
+  h    <- 5
   ws   <- buildInitialWordsearch(w = w, h = h, word = word)
-  microbenchmark(coordDt <- wordLocations(ws, word))
+  microbenchmark(coordDt <- findWord(ws, word), times = 10)
   microbenchmark(test1 <- buildImpossibleWs(w, h, word), times = 10)
   microbenchmark(test2 <- buildHardWs(w, h, word), times = 10)
-  drawWordSearch(test1, "juggle")
+  drawWordSearch(test2, word)
 }
