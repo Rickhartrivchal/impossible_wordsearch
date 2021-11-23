@@ -52,13 +52,13 @@ addWordToWs <- function(ws, word) {
   chosenString <- candidateStrings[sample(.N, 1, prob = w)]
   chosenStart  <- sample(chosenString$w - nchar(word) + 1, 1)
   chosenEnd    <- chosenStart + length(wordChars) - 1 
-  chosenMap    <- matrixMaps[[chosenString$type]]
   
-  # Find the x and y-coordinates of the chosen line
+  # Find the x- and y-coordinates of the chosen line
+  chosenMap <- matrixMaps[[chosenString$type]]
   x_list    <- split(row(ws), chosenMap)[[chosenString$pos]][chosenStart : chosenEnd]
   y_list    <- split(col(ws), chosenMap)[[chosenString$pos]][chosenStart : chosenEnd]
   
-  # Add the word now that we know the coordinates to add to
+  # Add wordChars to selected coordinates
   for (i in 1 : length(wordChars)) {
     ws[x_list[i], y_list[i]] <- wordChars[i]
   }
