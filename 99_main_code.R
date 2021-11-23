@@ -1,18 +1,71 @@
-library(genalg)
 library(ggplot2)
 library(data.table)
 library(stringr)
 library(magrittr)
 library(foreach)
 
-createInitialWordsearch <- function(w, h, word) {
+buildInitialWordsearch <- function(w, h, word) {
   # Creates an initial [h x w] wordsearch that the string word may or may not be in
-  draws <- unique(sample(strsplit(tolower(word),split = ""))[[1]])
+  draws <- unique(sample(strsplit(tolower(word), split = ""))[[1]])
   return(
     as.matrix(
-      data.frame(replicate(w,sample(draws,h,rep=T)))
+      data.frame(replicate(w, sample(draws, h, rep = T)))
     )
   )
+}
+
+addWordToWs <- function(ws, word) {
+  # Randomly adds word to the wordsearch
+  # - Doesn't test for single occurrence
+  # - random components: 1. 50/50 chance it will be forwards or backwards
+  #                      2. chance it will show up vert/horizontal/diag depends on dimensions
+  #                         but should be more or less even distribution
+  
+  # Generate all maps
+  matrixMaps <- list(horiz_mat  = nrow(ws) - row(ws),
+                     vert_mat   = ncol(ws) - col(ws),
+                     f_diag_mat = row(ws)  - col(ws),
+                     b_diag_mat = nrow(ws) - row(ws) - col(ws))
+  
+  # Make a list of all strings 
+  candidateStrings  <- 
+    lapply(seq_along(matrixMaps), # indices not matrixMaps for passing name + value together
+           FUN = function(types, maps, i) {
+             map  <- maps[[i]]
+             type <- types[i]
+             allStrings <- lapply(split(ws, map), 
+                                  FUN = paste0, collapse = "")
+             # Filter to remove strings that can't fit word
+             filteredStrings <- allStrings[sapply(allStrings, 
+                                                  FUN = function(x) nchar(x) >= nchar(word))]
+             # Each row of output corresponds to candidate string to add word to
+             data.table(type = types[i], pos = names(filteredStrings), 
+                        old_string = unlist(filteredStrings))
+           }, types = names(matrixMaps), maps = matrixMaps) %>%
+    rbindlist %>%
+    .[, w := nchar(old_string)]
+  
+  # Flip a coin for reversing word and get characters
+  wordChars <- strsplit(word, "")[[1]]
+  if (round(runif(1)) == 1) {wordChars <- rev(wordChars)}
+  
+  # Randomly choose string + starting position
+  chosenString <- candidateStrings[sample(.N, 1, prob = w)]
+  chosenStart  <- sample(chosenString$w - nchar(word) + 1, 1)
+  chosenEnd    <- chosenStart + length(wordChars) - 1 
+  chosenMap    <- matrixMaps[[chosenString$type]]
+  
+  # Find the x and y-coordinates of the chosen line
+  x_list    <- split(row(ws), chosenMap)[[chosenString$pos]][chosenStart : chosenEnd]
+  y_list    <- split(col(ws), chosenMap)[[chosenString$pos]][chosenStart : chosenEnd]
+  
+  # Add the word now that we know the coordinates to add to
+  for (i in 1 : length(wordChars)) {
+    ws[x_list[i], y_list[i]] <- wordChars[i]
+  }
+  
+  return(ws)
+  
 }
 
 wordLocations <- function(ws, word) {
@@ -67,84 +120,51 @@ wordLocations <- function(ws, word) {
     unique
 }
 
-
-if (FALSE) {
-  word <- "wow"
-  w <- 5
-  h <- 5
-  ws <- createInitialWordsearch(w = w, h = h, word = word)
-  microbenchmark(ok4 <- wordLocations(ws, word))
-}
-
-
-imp_ws_slow <- function(w,h,word) {
-  i <- 1 # iteration counter
-  if ((nchar(word)>w) & nchar(word)>h) {
-    stop("word too long to uphold feasability facade in given dimensions")
-  } else {
-  ws <- createInitialWordsearch(h,w,word) # generate initial word search, may or may not contain word
-  draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  coordDt <- wordLocations(ws, word)
-  tdo <- coordDt[, .N] # count number of bad indices
-  while(tdo > 0) {
-    # systematically change the values of the indices present in swap spots 
-    # to maximize the descent of nrow of swap.spots
-    swap.spots <- coordDt
-    one.swap.list <- list(ws) # base template for what the current iteration's best ws is
-    z <- 1
-    one.swap.index <- c()
-    for (i in 1:nrow(swap.spots)) { # for every swap spot...
-      current.character <- ws[swap.spots[i,1],
-                                   swap.spots[i,2]]
-      new.draws <- draws[-which(draws==current.character)]
-      for (j in 1:length(new.draws)) { # ...try every character in new.draws
-        df.tmp <- ws
-        df.tmp[swap.spots[i,1],
-               swap.spots[i,2]] <- new.draws[j] # and plug into ws.df.tmp
-        one.swap.list[[z]] <- df.tmp;z <- z+1 # store new ws in one.swap.list
-        one.swap.index <- c(one.swap.index, # store new score in one.swap.index
-                            nrow(wordLocations(df.tmp,word)))
-      }
-    }
-    which.is.best <- which(one.swap.index== 
-                             min(one.swap.index))[[1]] # pick a winner
-
-    ws <- one.swap.list[[which.is.best]] # thats the new word search
-    i <- i+1
-    print(paste0("After ",i," iterations objective not satisfied at ",
-                 nrow(wordLocations(ws,word))," indeces"))
-    print(ws)
-    tdo <- nrow(wordLocations(ws,word))
-    
-  }
-  }
-  ws
-}
-
-shuffleOnCoords <- function(ws, coords, draws) {
-  coords[, new_sample := sample(draws, .N, replace = TRUE)]
-  for (i in 1 : nrow(coords)) {
-    ws[coords[i, x], coords[i, y]] <- coords[i, new_sample]
-  }
-  return(ws)
-}
-
-imp_ws_juggle <- function(w,h,word) {
-  populationSize <- 10
+drawWordSearch <- function(ws, word) {
+  # creates a plot of the word search
+  ggdf <- cbind.data.frame(letters = unlist(ws %>% as.data.frame) %>%
+                             toupper,
+                           row = sapply(1 : nrow(ws), rep, ncol(ws)) %>% 
+                             as.data.frame %>% unlist,
+                           col = rep(1 : ncol(ws), nrow(ws)))
+  g <- ggplot(ggdf, aes(x = col, y = row, label = letters))
+  g <- g+ geom_text(aes(family = "Decima Mono"))
+  g <- g + xlab(paste0("85% of people can't find \"",
+                       word,"\".  Can you?"))
+  g <- g + theme(panel.background = element_blank(),
+                 axis.title.y = element_blank(),
+                 text = element_text(family="Decima Mono", size = 8),
+                 panel.grid = element_blank(),
+                 axis.text=element_blank())
+  g
   
-  i <- 1
-  ws <- createInitialWordsearch(w, h, word)
+}
+
+buildImpossibleWs <- function(w,h,word) {
+  
+  populationSize <- 10
+  iter_n <- 1
+  
+  redrawCoords <- function(ws, coords, draws) {
+    # outputs new ws with the input coords resampled from (single character vector) draws
+    maxRedraws <- 50
+    
+    for (i in 1 : min(maxRedraws, nrow(coords))) {
+      ws[coords[i, x], coords[i, y]] <- sample(draws, 1)
+    }
+    return(ws)
+  }
+  
+  ws <- buildInitialWordsearch(w, h, word)
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   coordDt <- wordLocations(ws, word)
-  while (nrow(coordDt) > 0 & i < 100) {
+  while (nrow(coordDt) > 0 & iter_n < 100) {
     # re-shuffle the remaining coords
     coordDt <- wordLocations(ws, word)
     
-    print(paste0("Iteration ", i, ". Word found at ", nrow(coordDt), " locations."))
-    
-    wsPopulation <- list()
-    for (i in 1 : populationSize) {
-      wsPopulation[[i]] <- shuffleOnCoords(ws, coordDt, draws)
+    # print(paste0("Iteration ", iter_n, ". Word found at ", nrow(coordDt), " locations."))
+    wsPopulation <- foreach(i = iter(1 : populationSize)) %do% {
+      redrawCoords(ws, coordDt, draws)
     }
     wsSize <- lapply(wsPopulation, FUN = wordLocations, word = word) %>%
       lapply(FUN = nrow)
@@ -152,184 +172,71 @@ imp_ws_juggle <- function(w,h,word) {
     # Pick the best one and move on
     ws <- wsPopulation[[which.min(wsSize)]]
     coordDt <- wordLocations(ws, word)
-    print(ws)
-    i <- i + 1
+    # print(ws)
+    iter_n <- iter_n + 1
   }
   return(ws)
 }
 
-imp_ws_less_slow <- function(w,h,word) {
-  i <- 1 # iteration counter
-  if (nchar(word) > max(w, h, na.rm = TRUE)) {
-    stop("word too long to uphold feasability facade in given dimensions")
+buildHardWs <- function(w, h, word) {
+  populationSize <- 10
+  iter_n <- 1
+  
+  redrawCoords <- function(ws, coords, draws) {
+    # outputs new ws with the input coords resampled from (single character vector) draws
+    maxRedraws <- 50
+    
+    for (i in 1 : min(maxRedraws, nrow(coords))) {
+      ws[coords[i, x], coords[i, y]] <- sample(draws, 1)
+    }
+    return(ws)
   }
   
-  ws <- createInitialWordsearch(w, h, word) # generate initial word search, may or may not contain word
-  draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  tdo <- nrow(wordLocations(ws,word)) # count number of bad indices
-  while(tdo > 0) {
-    # systematically change the values of the indices present in swap spots 
-    # to maximize the descent of nrow of swap.spots
-    swap.spots <- wordLocations(ws,word) 
-    one.swap.list <- list(ws) # base template for what the current iteration's best ws is
-    z <- 1
-    one.swap.index <- c()
-    i <- 1
-    get_this_lower <- tdo
-    for (i in 1:nrow(swap.spots)) { # for every swap spot...
-      current.character <- ws[swap.spots[i,x],
-                              swap.spots[i,y]]
-      new.draws <- draws[-which(draws==current.character)]
-      for (j in 1:length(new.draws)) { # ...try every character in new.draws
-        df.tmp <- ws
-        df.tmp[swap.spots[i,x],
-               swap.spots[i,y]] <- new.draws[j] # and plug into ws.df.tmp
-        one.swap.list[[z]] <- df.tmp;z <- z+1 # store new ws in one.swap.list
-        one.swap.index <- c(one.swap.index, # store new score in one.swap.index
-                            nrow(wordLocations(df.tmp,word)))
-      }
-    }
-    which.is.best <- which(one.swap.index== 
-                             min(one.swap.index))[[1]] # pick a winner
+  # Initialize an impossible word search
+  ws      <- buildImpossibleWs(w, h, word)
+  draws   <- unique(sample(strsplit(tolower(word),split=""))[[1]])
+  coordDt <- wordLocations(ws, word)
+  
+  # The while loop will keep going until it shows up exactly once
+  while (nrow(coordDt) != nchar(word)) {
+    print(paste0("Iteration ", iter_n, ". Word found at ", nrow(coordDt), " locations."))
     
-    ws <- one.swap.list[[which.is.best]] # thats the new word search
-    i <- i+1
-    print(paste0("After ",i," iterations objective not satisfied at ",
-                 nrow(wordLocations(ws,word))," indeces"))
-    print(ws)
-    tdo <- nrow(wordLocations(ws,word))
-    
-  }
-  ws
-}
-
-imp_ws <- function(n,p,word) {
-  i <- 1
-  ws <- createInitialWordsearch(n,p,word)
-  draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
-  i <- 1
-  j <- 1
-  while(nrow(wordLocations(ws,word))>0) {
-    swap.spots <- wordLocations(ws,word)
-    current.character <- ws[swap.spots[i,1],swap.spots[i,2]]
-    new.draws <- draws[-which(draws==current.character)]
-    ws.tmp <- ws
-    ws.tmp[swap.spots[i,1],swap.spots[i,2]] <- new.draws[j]
-    if (nrow(wordLocations(ws.tmp,word))<nrow(swap.spots)) {
-      print(paste0("After ",i," iterations objective not satisfied at ",
-                   nrow(wordLocations(ws,word))," indeces swap made at",
-                   swap.spots[i,1]," ",swap.spots[i,2]))
-      print(ws.tmp)
-      i <- i+1
-      ws <- ws.tmp
-      i <- 1
-      j <- 1
+    # If the word doesn't appear...
+    if (nrow(coordDt) == 0) {
+      # ...force the word in
+      ws <- addWordToWs(ws, word)
+      coordDt <- wordLocations(ws, word)
     } else {
-      if (i>nrow(swap.spots)) {
-        stop("what happened?")
-      } else {
-        if (j==length(new.draws)) {
-          j <- 1
-          i <- i+1
-        } else {
-          j <- j+1
-        }
+    # Otherwise you accidentally made it occur more than once 
+    # Find the best solution be finding which.min()[nchar > 0]
+      wsPopulation <- foreach(i = iter(1 : populationSize)) %do% {
+        redrawCoords(ws, coordDt, draws)
       }
+      wsSize <- lapply(wsPopulation, FUN = wordLocations, word = word) %>%
+        lapply(FUN = nrow)
+      
+      # Pick the best one and move on
+      ws <- wsPopulation[[which.min(ifelse(wsSize == 0, 999, wsSize))]]
     }
-    
-    
-    
-    
+    coordDt <- wordLocations(ws, word)
+    # print(ws)
+    iter_n <- iter_n + 1
   }
+  return(ws)
 }
-
-evaluateWs <- function(string = c(), w = inW, h = inH, word = inWord) {
-  
-  ppTolerance <- 0.25 # maximum %-points diference of each letter's frequency 
-                   # before adding penalty
-  
-  # we know: w, h, word
-  # input format: 
-  # c([1,1], [1, 2],..., [1, n], [2, 1], ..., [n, n-1], [n, n])
-  # need to output a number of occurrences
-  charsUsed   <- unique(strsplit(word, "") %>% unlist)
-  wordStrings <- charsUsed[as.integer(string)] # floor, not round
-  initialWs   <- matrix(wordStrings, nrow = h, ncol = w) 
-  countScore  <- countWsOccurs(df = initialWs, countWord = word)
-  
-  proportionTable <- data.table(chars_used = charsUsed) %>%
-    .[, ':='(word_dist = strsplit(word, "") %>% 
-               unlist %>% 
-               '=='(chars_used) %>% 
-               sum / nchar(word),
-             string_dist = sum(wordStrings == 
-                                 chars_used, na.rm = TRUE) / 
-               length(wordStrings)),
-      by = chars_used] %>%
-    .[, dist := abs(word_dist - string_dist)]
-  proportionScore <- 100 * proportionTable[, pmax(0, max(dist) - ppTolerance)]
-  return((100 + countScore) + proportionScore)
-}
-
-chooseBestWs <- function(w, h, word) {
-  rbgaResults <- rbga(stringMin = rep(1, w * h),
-                      stringMax = rep(1 + uniqueN(strsplit(word, "") %>% unlist), w * h),
-                      iters = 2, 
-                      # monitorFunc=monitor, 
-                      evalFunc=evaluateWs, verbose=TRUE, mutationChance=0.01)
-  bestWs <- rbga.results$population[which.min(rbga.results$evaluations),]
-  charsUsed   <- unique(strsplit(word, "") %>% unlist)
-  wordStrings <- charsUsed[as.integer(bestWs)] # floor, not round
-  initialWs   <- matrix(wordStrings, nrow = h, ncol = w) 
-}
-
-
 
 if (FALSE) {
+  rm(list = ls())
+  setwd("~/my_code/impossible_wordsearch")
+  sapply(list.files(".", full.names = TRUE), FUN = function(x) 
+    if (grepl(".R$", toupper(x))) {source(x)})
   
-  # TODO: you could have all k's on left quadrant and all o's on right quadrant and get chosen
-  # as the best word search. this can be fixed by running the distribution score on 
-  # some subset of windows on the matrix.
-  
-  w <- 5
-  h <- 3
-  inWord <- "kok"
-  rbga.results = rbga(stringMin = rep(1, w * h),
-                      stringMax = rep(1 + uniqueN(strsplit(inWord, "") %>% unlist), w * h),
-                      iters = 2, 
-                      # monitorFunc=monitor, 
-                      evalFunc=evaluateWs, verbose=TRUE, mutationChance=0.01)
-  evaluateWs(string = rbga.results$population[1,],
-             w = w, h = h, word = inWord)
-  
-  
-  
-  monitor <- function(obj) {
-    # plot the population
-    xlim = c(obj$stringMin[1], obj$stringMax[1]);
-    ylim = c(obj$stringMin[2], obj$stringMax[2]);
-    plot(obj$population, xlim=xlim, ylim=ylim, 
-         xlab="pi", ylab="sqrt(50)");
-  }
-  
-  
-  plot(rbga.results)
-  plot(rbga.results, type="hist")
-  plot(rbga.results, type="vars")
-  
-  # system.time(wordLocations(df = df, word = "kook"))
-  # systmem.time(wordLocations.f(df = df, word = "kook"))
-  
-  wordLocations.f <- function(df, word) {
-    M <- data.frame(matrix(vector(), 0, 2))
-    totalOccurs <- is.it.in()
-    for (i in 1 : nrow(df)) {
-      for (j in 1 : ncol(df)) {
-        
-        df.tmp <- df
-        df.tmp[i, i] <- NA
-        # if (is.it.in(df, word, i, j) )
-      }
-    }
-  }
+  word <- "wow"
+  w    <- 15
+  h    <- 15
+  ws   <- buildInitialWordsearch(w = w, h = h, word = word)
+  microbenchmark(coordDt <- wordLocations(ws, word))
+  microbenchmark(test1 <- buildImpossibleWs(w, h, word), times = 10)
+  microbenchmark(test2 <- buildHardWs(w, h, word), times = 10)
+  drawWordSearch(test1, "juggle")
 }
