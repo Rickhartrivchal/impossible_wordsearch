@@ -4,9 +4,9 @@ library(stringr)
 library(magrittr)
 library(foreach)
 
-buildInitialWordsearch <- function(w, h, word) {
+buildInitialWs <- function(w, h, word) {
   # Creates an initial [h x w] wordsearch that the string word may or may not be in
-  draws <- unique(sample(strsplit(tolower(word), split = ""))[[1]])
+  draws <- unique(strsplit(tolower(word), split = "")[[1]])
   return(
     as.matrix(
       replicate(w, sample(draws, h, rep = T))
@@ -119,7 +119,7 @@ findWord <- function(ws, word) {
     unique
 }
 
-drawWordSearch <- function(ws, word) {
+drawWs <- function(ws, word) {
   # creates a plot of the word search
   ggdf <- cbind.data.frame(letters = unlist(ws %>% as.data.frame) %>%
                              toupper,
@@ -141,12 +141,12 @@ drawWordSearch <- function(ws, word) {
 
 buildImpossibleWs <- function(w,h,word) {
   
-  populationSize <- 10
+  populationSize <- 100
   iter_n <- 1
   
   redrawCoords <- function(ws, coords, draws) {
     # Outputs new ws with the values in coords resampled from (single character vector) draws
-    maxRedraws <- 50
+    maxRedraws <- 500
     redraws <- min(maxRedraws, nrow(coords))
     
     for (i in 1 : redraws) {
@@ -155,7 +155,7 @@ buildImpossibleWs <- function(w,h,word) {
     return(ws)
   }
   
-  ws <- buildInitialWordsearch(w, h, word)
+  ws <- buildInitialWs(w, h, word)
   draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   coordDt <- findWord(ws, word)
   while (nrow(coordDt) > 0 & iter_n < 100) {
@@ -178,22 +178,21 @@ buildImpossibleWs <- function(w,h,word) {
   return(ws)
 }
 
-buildHardWs <- function(w, h, word) {
-  populationSize <- 10
-  iter_n <- 1
+buildHardWs <- function(w, h, word, pop_size = 50, redraw_size = 20) {
+  populationSize <- pop_size
+
   
   redrawCoords <- function(ws, coords, draws) {
     # outputs new ws with the input coords resampled from (single character vector) draws
-    maxRedraws <- 50
-    
-    for (i in 1 : min(maxRedraws, nrow(coords))) {
+    for (i in 1 : min(redraw_size, nrow(coords))) {
       ws[coords[i, x], coords[i, y]] <- sample(draws, 1)
     }
     return(ws)
   }
   
-  # Initialize an impossible word search
-  ws      <- buildImpossibleWs(w, h, word)
+  # Initialize word search
+  iter_n <- 1
+  ws      <- buildInitialWs(w, h, word)
   draws   <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   coordDt <- findWord(ws, word)
   
@@ -220,23 +219,26 @@ buildHardWs <- function(w, h, word) {
     }
     coordDt <- findWord(ws, word)
     # print(ws)
+
     iter_n <- iter_n + 1
   }
   return(ws)
 }
 
 if (FALSE) {
+  # TODO: Explore what the best default values are for the paramters dictating how
+  # ws's get shuffled around
   rm(list = ls())
   setwd("~/my_code/impossible_wordsearch")
   sapply(list.files(".", full.names = TRUE), FUN = function(x) 
     if (grepl(".R$", toupper(x))) {source(x)})
   
-  word <- "lex"
-  w    <- 5
-  h    <- 5
-  ws   <- buildInitialWordsearch(w = w, h = h, word = word)
+  word <- "Buster"
+  w    <- 50
+  h    <- 50
+  ws   <- buildInitialWs(w = w, h = h, word = word)
   microbenchmark(coordDt <- findWord(ws, word), times = 10)
   microbenchmark(test1 <- buildImpossibleWs(w, h, word), times = 10)
-  microbenchmark(test2 <- buildHardWs(w, h, word), times = 10)
-  drawWordSearch(test2, word)
+  test2 <- buildHardWs(w, h, word)
+  drawWs(test2, word)
 }

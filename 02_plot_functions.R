@@ -3,11 +3,11 @@ library(ggplot2)
 
 renderUnsolved <- function(ws, word) {
   # creates a plot of the word search
-  ggdf <- cbind.data.frame(letters = unlist(ws %>% as.data.frame) %>%
-                             toupper,
-                           row = sapply(1 : nrow(ws), rep, ncol(ws)) %>% 
-                             as.data.frame %>% unlist,
-                           col = rep(1 : ncol(ws), nrow(ws)))
+  ggdf <- data.table(letters = unlist(ws %>% as.data.frame) %>%
+                       toupper,
+                     col = sapply(1 : ncol(ws), rep, nrow(ws)) %>% 
+                       as.data.frame %>% unlist,
+                     row = rep(1 : nrow(ws), ncol(ws)))
   g <- ggplot(ggdf, aes(x = col, y = row, label = letters))
   g <- g+ geom_text(aes(family = "Decima Mono"))
   g <- g + xlab(paste0("85% of people can't find \"",
@@ -23,29 +23,30 @@ renderUnsolved <- function(ws, word) {
 
 renderSolved <- function(ws, word, good_or_bad = "good") {
   coordDt <- findWord(ws, word)[order(x, y)]
-  point1  <- coordDt[1, c(x, y)]
-  point2  <- coordDt[.N, c(x, y)]
+  point1  <- coordDt[1, c(y, x)]
+  point2  <- coordDt[.N, c(y, x)]
   plotCol <- ifelse(good_or_bad == "good", "green", "red")
   plotMsg <- ifelse(good_or_bad == "good", "GOOD JOB", "BAD JOB")
   msg_n   <- 15
   # creates a plot of the word search
-  ggdf <- cbind.data.frame(letters = unlist(ws %>% as.data.frame) %>%
-                             toupper,
-                           row = sapply(1 : nrow(ws), rep, ncol(ws)) %>% 
-                             as.data.frame %>% unlist,
-                           col = rep(1 : ncol(ws), nrow(ws)))
+  ggdf <- data.table(letters = unlist(ws %>% as.data.frame) %>%
+                       toupper,
+                     col = sapply(1 : ncol(ws), rep, nrow(ws)) %>% 
+                       as.data.frame %>% unlist,
+                     row = rep(1 : nrow(ws), ncol(ws)))
   g <- ggplot(ggdf, aes(x = col, y = row, label = letters)) + 
     geom_text(aes(family = "Decima Mono")) + 
     xlab(paste0("85% of people can't find \"",
                 word,"\".  Can you?")) + 
-    geom_label(data = data.table(x = runif(msg_n, min = 0, max = nrow(ws)), 
-                                 y = runif(msg_n, min = 0, max = ncol(ws))),
+    geom_label(data = data.table(x = runif(msg_n, min = 0, max = ncol(ws)), 
+                                 y = runif(msg_n, min = 0, max = nrow(ws)),
+                                 angle = runif(msg_n, min = -180, max = 180)),
                aes(x = x, y = y),
                label = plotMsg, size = 5,
                color = plotCol, fill = "#b33877", label.size = 0, alpha = .5) + 
     geom_segment(aes(x = point1[1], xend = point2[1], 
                      y = point1[2], yend = point2[2]), 
-                 color = "orange", size = 2, alpha = .1, lty = 3) + 
+                 color = "orange", size = 2, alpha = .1, lty = 1) + 
     theme(panel.background = element_blank(),
           axis.title.y = element_blank(),
           text = element_text(family="Decima Mono", size = 8),
@@ -58,10 +59,30 @@ renderSolved <- function(ws, word, good_or_bad = "good") {
 if (FALSE) {
   w <- 5
   h <- 5
-  word <- "lex"
-  ws <- buildHardWs(w, h, word)
+  word <- "god"
+  ok <- microbenchmark(buildHardWs(w, h, word), times)
   ws
   renderUnsolved(ws, word)
   renderSolved(ws, word, "good")
   renderSolved(ws, word, "bad")
+  
+  test_dt <- data.table(
+    expand.grid(
+      pop_size = seq(5, 20, by = 5),
+      redraw_size = seq(80, 200, by = 20),
+      w = w,
+      h = h,
+      word = word
+    )
+  )
+  test_dt[, eval20 := as.integer(NA)]
+  foreach(i = 1 : nrow(test_dt)) %do% {
+    test_dt$eval20[i] <- microbenchmark(buildHardWs(w = w, h = h,
+                                                    word = word, 
+                                                    pop_size = test_dt[i, pop_size],
+                                                    redraw_size = test_dt[i, redraw_size]),
+                                        times = 5)$time %>%
+      mean %>% `/`(1000 * 1000)
+  }
+  test_dt_master <- list(test_dt_master[1 : 6], test_dt) %>% rbindlist
 }
