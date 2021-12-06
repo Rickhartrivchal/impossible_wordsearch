@@ -1,9 +1,9 @@
 
 if (FALSE) {
-  # Test 1
+  rm(list = ls())
+  library(microbenchmark)
   logDir <- "~"
   logName <- "timing_test.csv"
-  rm(list = ls())
   setwd("~/my_code/impossible_wordsearch")
   sapply(list.files(".", full.names = TRUE), FUN = function(x) 
     if (grepl(".R$", toupper(x))) {source(x)})
