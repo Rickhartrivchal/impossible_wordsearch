@@ -8,8 +8,11 @@ renderUnsolved <- function(ws, word) {
                      col = sapply(1 : ncol(ws), rep, nrow(ws)) %>% 
                        as.data.frame %>% unlist,
                      row = rep(1 : nrow(ws), ncol(ws)))
+  textSize <- 12 / (pmax(0, (nrow(ws) - 80) * .1) + 
+    pmax(0, (ncol(ws) - 100) * .2) + 1)
+  print(textSize)
   g <- ggplot(ggdf, aes(x = col, y = row, label = letters))
-  g <- g+ geom_text(aes(family = "Decima Mono"), size = 12)
+  g <- g+ geom_text(aes(family = "Decima Mono"), size = textSize)
   g <- g + xlab(paste0("85% of people can't find \"",
                        word,"\".  Can you?"))
   g <- g + theme(panel.background = element_blank(),

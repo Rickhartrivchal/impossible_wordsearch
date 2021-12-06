@@ -15,6 +15,7 @@ library(shiny)
 #         - thats the correct condition like an "E: none of these are correct"
 # - make a toggle for that mode
 
+# Optimized or 3840 x 2160
 
 ui <- basicPage(
   sidebarLayout(
@@ -26,12 +27,12 @@ ui <- basicPage(
       numericInput("h", label = "Height: ", min = 1, max = 100, value = 10),
       
       textInput("word", label = "Word: ", value = "word"),
-      actionButton(inputId = "press_build", "Build!")
+      actionButton(inputId = "press_build", "Build!"), width = 1
     ),
     mainPanel(
       plotOutput("ws_output", click = "plot_click",
-                  height = "800px"),
-      textOutput("timeleft")
+                  height = "1000px"),
+      textOutput("timeleft"), width = 11
     )
   )
 )
@@ -39,17 +40,16 @@ ui <- basicPage(
 # This could mean having a designated person input what the crowd is screaming
 server <- function(input, output) {
   
-  # output$ws_output <- renderPlot(ggplot())
-  timer <- reactiveTimer(5000)
+  # timer <- reactiveTimer(5000) # uncomment this
   
   # Output the time left.
-  output$timeleft <- renderText({
-    paste("Time left: ", seconds_to_period(timer()))
-  })
+  # output$timeleft <- renderText({
+  #   paste("Time left: ", seconds_to_period(timer()))
+  # })
   
   inputData <- reactive({
     
-    timer()
+    # timer() uncomment this
     print("The detail of the pattern is movement")
 
     ws <- buildHardWs(w = input$w, h = input$h, word = input$word)
@@ -58,7 +58,7 @@ server <- function(input, output) {
   
   observeEvent(input$press_build, {
     output$ws_output <- renderPlot({
-      timer()
+      # timer() uncomment this
       # invalidateLater(1000)
       renderUnsolved(ws = inputData()$ws, word = input$word) + 
         ggtitle(paste0((runif(n = 2) * 20) %>% round(0), collapse = ""))
