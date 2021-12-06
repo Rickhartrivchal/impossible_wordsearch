@@ -8,13 +8,16 @@ renderUnsolved <- function(ws, word) {
                      col = sapply(1 : ncol(ws), rep, nrow(ws)) %>% 
                        as.data.frame %>% unlist,
                      row = rep(1 : nrow(ws), ncol(ws)))
+  textSize <- 12 / (pmax(0, (nrow(ws) - 80) * .1) + 
+    pmax(0, (ncol(ws) - 100) * .2) + 1)
+  print(textSize)
   g <- ggplot(ggdf, aes(x = col, y = row, label = letters))
-  g <- g+ geom_text(aes(family = "Decima Mono"))
+  g <- g+ geom_text(aes(family = "Decima Mono"), size = textSize)
   g <- g + xlab(paste0("85% of people can't find \"",
                        word,"\".  Can you?"))
   g <- g + theme(panel.background = element_blank(),
                  axis.title.y = element_blank(),
-                 text = element_text(family="Decima Mono", size = 8),
+                 text = element_text(family="Decima Mono", size = 12),
                  panel.grid = element_blank(),
                  axis.text=element_blank())
   g
@@ -35,54 +38,44 @@ renderSolved <- function(ws, word, good_or_bad = "good") {
                        as.data.frame %>% unlist,
                      row = rep(1 : nrow(ws), ncol(ws)))
   g <- ggplot(ggdf, aes(x = col, y = row, label = letters)) + 
-    geom_text(aes(family = "Decima Mono")) + 
+    geom_text(aes(family = "Decima Mono"), size = 12) + 
     xlab(paste0("85% of people can't find \"",
                 word,"\".  Can you?")) + 
-    geom_label(data = data.table(x = runif(msg_n, min = 0, max = ncol(ws)), 
-                                 y = runif(msg_n, min = 0, max = nrow(ws)),
-                                 angle = runif(msg_n, min = -180, max = 180)),
+    geom_label(data = data.table(x = runif(msg_n, min = 2, max = ncol(ws)), 
+                                 y = runif(msg_n, min = 2, max = nrow(ws))),
                aes(x = x, y = y),
-               label = plotMsg, size = 5,
+               label = plotMsg, size = 12,
                color = plotCol, fill = "#b33877", label.size = 0, alpha = .5) + 
     geom_segment(aes(x = point1[1], xend = point2[1], 
                      y = point1[2], yend = point2[2]), 
                  color = "orange", size = 2, alpha = .1, lty = 1) + 
     theme(panel.background = element_blank(),
           axis.title.y = element_blank(),
-          text = element_text(family="Decima Mono", size = 8),
+          text = element_text(family="Decima Mono", size = 12),
           panel.grid = element_blank(),
           axis.text=element_blank())
   g
   
 }
 
+renderClicked <- function(ws, word, click_x, click_y) {
+  coordDt <- findWord(ws = ws, word = word)
+  coordDtClicked <- coordDt[x == round(click_x)][y == round(click_y)]
+  if (coordDtClicked[, .N] > 0) {
+    renderSolved(ws, word, "good")
+  } else {
+    renderSolved(ws, word, "bad")
+  }
+}
+
+
+
 if (FALSE) {
   w <- 5
   h <- 5
   word <- "god"
-  ok <- microbenchmark(buildHardWs(w, h, word), times)
-  ws
+  ws <- buildHardWs(w = w, h = h, word = word)
   renderUnsolved(ws, word)
   renderSolved(ws, word, "good")
   renderSolved(ws, word, "bad")
-  
-  test_dt <- data.table(
-    expand.grid(
-      pop_size = seq(5, 20, by = 5),
-      redraw_size = seq(80, 200, by = 20),
-      w = w,
-      h = h,
-      word = word
-    )
-  )
-  test_dt[, eval20 := as.integer(NA)]
-  foreach(i = 1 : nrow(test_dt)) %do% {
-    test_dt$eval20[i] <- microbenchmark(buildHardWs(w = w, h = h,
-                                                    word = word, 
-                                                    pop_size = test_dt[i, pop_size],
-                                                    redraw_size = test_dt[i, redraw_size]),
-                                        times = 5)$time %>%
-      mean %>% `/`(1000 * 1000)
-  }
-  test_dt_master <- list(test_dt_master[1 : 6], test_dt) %>% rbindlist
 }

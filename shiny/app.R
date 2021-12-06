@@ -1,73 +1,80 @@
 rm(list = ls()); gc()
+setwd("~/my_code/impossible_wordsearch")
 sapply(list.files(".", full.names = TRUE), FUN = function(x) {
   if (grepl(".R$", toupper(x))) {source(x)} })
 
 library(shiny)
 
+# TODO list
+# - Make the plot letters bigger/nicer/general plot clean-up
+# - Design the shiny app's "next game" logic
+# - Make the shiny app have "next game" logic
+# - Radio button toggle to set up adaptive mode
+# - build logic + functions of adaptive mode
+# - make a % chance that you will get an impossible ws + button to choose that
+#         - thats the correct condition like an "E: none of these are correct"
+# - make a toggle for that mode
 
+# Optimized or 3840 x 2160
 
 ui <- basicPage(
   sidebarLayout(
     
     sidebarPanel(
-      numericInput("w", label = "Width: ", min = 1, max = 100),
-      numericInput("h", label = "Height: ", min = 1, max = 100),
+      radioButtons(inputId = "game_type", choices = c("custom", "adaptive"),
+                   label = "Select game type:"),
+      numericInput("w", label = "Width: ", min = 1, max = 100, value = 10),
+      numericInput("h", label = "Height: ", min = 1, max = 100, value = 10),
       
-      textInput("word", label = "Word: ", value = "word")
+      textInput("word", label = "Word: ", value = "word"),
+      actionButton(inputId = "press_build", "Build!"), width = 1
     ),
     mainPanel(
-      plotOutput("ws_output", click = "plot_click", height = 50)
+      plotOutput("ws_output", click = "plot_click",
+                  height = "1000px"),
+      textOutput("timeleft"), width = 11
     )
   )
 )
+# I dont want the user input to be interesting, I want tactics to be interesting
+# This could mean having a designated person input what the crowd is screaming
 server <- function(input, output) {
   
-  # Reactive table
-  values <- reactiveValues()
-  values$selected_table <- data.table(x = numeric(), 
-                                      release = character())
+  # timer <- reactiveTimer(5000) # uncomment this
   
+  # Output the time left.
+  # output$timeleft <- renderText({
+  #   paste("Time left: ", seconds_to_period(timer()))
+  # })
   
-  output$ws_output <- renderPlot({
-    activeReleases <- values$selected_table$release
-    plotTotalsBar(totalsDt = masterData()[["totalsDt"]], activeReleases = activeReleases)
+  inputData <- reactive({
+    
+    # timer() uncomment this
+    print("The detail of the pattern is movement")
+
+    ws <- buildHardWs(w = input$w, h = input$h, word = input$word)
+    list(ws = ws, word = input$word)
+  })
+  
+  observeEvent(input$press_build, {
+    output$ws_output <- renderPlot({
+      # timer() uncomment this
+      # invalidateLater(1000)
+      renderUnsolved(ws = inputData()$ws, word = input$word) + 
+        ggtitle(paste0((runif(n = 2) * 20) %>% round(0), collapse = ""))
+    })
   })
   
   observeEvent(input$plot_click, {
-    clickedRelease <- whichMovieGotClicked(totalsDt = masterData()[["totalsDt"]], x_coord = input$plot_click$x)
-    values$selected_table <- rbind(values$selected_table,
-                                   data.table(x = input$plot_click$x,
-                                              release = clickedRelease)) %>%
-      .[, N := .N, by = release] %>% 
-      .[N < 2] %>% .[, N := NULL]
+    lat <- round(input$plot_click$x, 0)
+    long <- round(input$plot_click$y, 0)
+    print(c(lat, long))
+    output$ws_output <- renderPlot({
+      renderClicked(ws = inputData()$ws,
+                    word = inputData()$word,
+                    click_x = long, click_y = lat)
+    })
   })
   
-  # Active Movie Configuration
-  output$plot2 <- renderPlot({
-    activeReleases <- values$selected_table$release
-    plotDirectorDataWalletShare(directorDt = masterData()[["directorDt"]][release %in% activeReleases]) + 
-      scale_color_manual(values = masterPalette()[which(names(masterPalette()) %in% activeReleases)])
-  })
-  
-  # Box office performance 
-  output$plot3 <- renderPlot({
-    activeReleases <- values$selected_table$release
-    plotTotalBars(totalsDt = copy(masterData()[["totalsDt"]]) %>%
-                    .[!(release %in% activeReleases), ':='(domestic_total = 0)],
-                  activeRelease = activeReleases) + 
-      scale_fill_manual(values = masterPalette()[which(names(masterPalette()) %in% activeReleases)])
-  })
-  
-  # Tooltip configuration
-  output$hover_info <- renderText({
-    if(!is.null(input$plot_hover)){
-      hover=input$plot_hover
-      hoveredRelease <- whichMovieGotClicked(totalsDt = masterData()[["totalsDt"]], x_coord = hover$x)
-      # print(activeReleases())
-      # print(toolTipForMovie(directorDt = masterData(), releaseName = hoveredRelease))
-    } else {
-      "Use this bar to get more info and populate below graphs."
-    }
-  })
 }
 shinyApp(ui, server)

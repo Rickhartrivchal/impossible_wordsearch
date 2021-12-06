@@ -3,6 +3,7 @@ library(data.table)
 library(stringr)
 library(magrittr)
 library(foreach)
+library(iterators)
 
 buildInitialWs <- function(w, h, word) {
   # Creates an initial [h x w] wordsearch that the string word may or may not be in
@@ -139,16 +140,13 @@ drawWs <- function(ws, word) {
   
 }
 
-buildImpossibleWs <- function(w,h,word) {
+buildImpossibleWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
   
-  populationSize <- 100
   iter_n <- 1
   
   redrawCoords <- function(ws, coords, draws) {
     # Outputs new ws with the values in coords resampled from (single character vector) draws
-    maxRedraws <- 500
-    redraws <- min(maxRedraws, nrow(coords))
-    
+    redraws <- min(redraw_size, nrow(coords))
     for (i in 1 : redraws) {
       ws[coords[i, x], coords[i, y]] <- sample(draws, 1)
     }
@@ -163,7 +161,7 @@ buildImpossibleWs <- function(w,h,word) {
     coordDt <- findWord(ws, word)
     
     # print(paste0("Iteration ", iter_n, ". Word found at ", nrow(coordDt), " locations."))
-    wsPopulation <- foreach(i = iter(1 : populationSize)) %do% {
+    wsPopulation <- foreach(i = iter(1 : pop_size)) %do% {
       redrawCoords(ws, coordDt, draws)
     }
     wsSize <- lapply(wsPopulation, FUN = findWord, word = word) %>%
@@ -178,10 +176,9 @@ buildImpossibleWs <- function(w,h,word) {
   return(ws)
 }
 
-buildHardWs <- function(w, h, word, pop_size = 50, redraw_size = 20) {
-  populationSize <- pop_size
+buildHardWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
+  # Makes the word show up exactly once
 
-  
   redrawCoords <- function(ws, coords, draws) {
     # outputs new ws with the input coords resampled from (single character vector) draws
     for (i in 1 : min(redraw_size, nrow(coords))) {
@@ -191,7 +188,7 @@ buildHardWs <- function(w, h, word, pop_size = 50, redraw_size = 20) {
   }
   
   # Initialize word search
-  iter_n <- 1
+  iter_n  <- 1
   ws      <- buildInitialWs(w, h, word)
   draws   <- unique(sample(strsplit(tolower(word),split=""))[[1]])
   coordDt <- findWord(ws, word)
@@ -208,7 +205,7 @@ buildHardWs <- function(w, h, word, pop_size = 50, redraw_size = 20) {
     } else {
     # Otherwise you accidentally made it occur more than once 
     # Find the best solution be finding which.min()[nchar > 0]
-      wsPopulation <- foreach(i = iter(1 : populationSize)) %do% {
+      wsPopulation <- foreach(i = iter(1 : pop_size)) %do% {
         redrawCoords(ws, coordDt, draws)
       }
       wsSize <- lapply(wsPopulation, FUN = findWord, word = word) %>%
