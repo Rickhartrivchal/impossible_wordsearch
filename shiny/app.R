@@ -6,18 +6,24 @@ sapply(list.files(".", full.names = TRUE), FUN = function(x) {
 library(shiny)
 
 # TODO list
-# - Make the plot letters bigger/nicer/general plot clean-up
-# - Design the shiny app's "next game" logic
-# - Make the shiny app have "next game" logic
-# - Radio button toggle to set up adaptive mode
-# - build logic + functions of adaptive mode
-# - make a % chance that you will get an impossible ws + button to choose that
-#         - thats the correct condition like an "E: none of these are correct"
-# - make a toggle for that mode
 
-# Optimized or 3840 x 2160
+# - Configure Display
+# - a. Shrink text formula so that it has right numbers plugged in it (treat 2:1 as baseline)
+# - b. Try out forcing the resolution to be consistent by printing a temporary image and forcing the resolution
 
-ui <- basicPage(
+
+# - Configure gameplay
+#   a. incorporate board refresher logic
+#   b. adaptive game logic + radio button toggle
+#   c. (stretch goal) incorporate "none of these are correct" button for really hard modes (% occurrence as toggle)
+
+# - Write the readme
+# - a. Explain the logic of how the word searches get built
+# - b. The rules of the game
+# - c. Intended applications (build upon the hypernormalization example, its crowd knowledge)
+
+
+ui <- fluidPage(
   sidebarLayout(
     
     sidebarPanel(
