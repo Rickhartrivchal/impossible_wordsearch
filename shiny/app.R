@@ -29,10 +29,11 @@ render4kPlot <- function(a_plot) {
 
 # TODO list
 
-# - Configure Display
-# - a. Shrink text formula so that it has right numbers plugged in it (treat 2:1 as baseline) (this could be resolution only)
-# - b. Try out forcing the resolution to be consistent by printing a temporary image and forcing the resolution
-
+# Backlog
+# - FIX BUGS
+# - make the x's and y's not have to be flipped when making the clicked image
+# - clicking "good" or "bad" assignment isn't working correctly - need to fix
+#     - need to figure out how many pixels until the plot starts in a ggplot object with math
 
 # - Configure gameplay
 #   a. incorporate board refresher logic
@@ -45,6 +46,7 @@ render4kPlot <- function(a_plot) {
 # - c. Intended applications (build upon the hypernormalization example, its crowd knowledge)
 
 # Optimized or 3840 x 2160
+# Recommended max reasonable ws: 600 * 220
 
 ui <- fluidPage(
   sidebarLayout(
@@ -83,8 +85,6 @@ server <- function(input, output) {
   inputData <- eventReactive(input$press_build, {
     
     # timer() uncomment this
-    print("The detail of the pattern is movement")
-    
     ws <- buildHardWs(w = input$w, h = input$h, word = input$word)
     unsolvedPlot <- renderUnsolved(ws   = ws,
                                    word = input$word)
@@ -106,14 +106,29 @@ server <- function(input, output) {
   observeEvent(input$plot_click, {
     x    <- input$plot_click$x
     y    <- input$plot_click$y
+    
     xmax <- input$plot_click$domain$right
     ymax <- input$plot_click$domain$bottom
-    print(c((input$w * x / xmax) + .5, (input$h * (ymax - y) / ymax) + .5))
+    
+    xpad <- xmax * .05
+    ypad <- ymax * .05
+    
+    
+    # These are flipped because of a bug in findWord() somewhere...
+    # click_y <- (input$w * (x / xmax)) + .5
+    # click_x <- (input$h * (ymax - y) / ymax) + .5
+    
+    click_x <- scales::rescale(x = x, from = c(xpad, xmax), to = c(1, ncol(inputData()$ws)))
+    click_y <- scales::rescale(x = y, from = c(ypad, ymax), to = c(nrow(inputData()$ws), 1))
+    
+    print(input$plot_click$domain)
+    print(c(input$plot_click$x, input$plot_click$y))
+    print(c(click_x %>% round, click_y %>% round));
     output$myImage <- render4kPlot(
       renderClicked(ws      = inputData()$ws,
                     word    = inputData()$word,
-                    click_x = (input$w * x / xmax) + .5,
-                    click_y = (input$h * (ymax - y) / ymax) + .5
+                    click_x = click_x,
+                    click_y = click_y
       )
     )
   })
