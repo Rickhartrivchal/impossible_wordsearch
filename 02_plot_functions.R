@@ -8,8 +8,9 @@ renderUnsolved <- function(ws, word) {
                      col = sapply(1 : ncol(ws), rep, nrow(ws)) %>% 
                        as.data.frame %>% unlist,
                      row = rep(1 : nrow(ws), ncol(ws)))
-  textSize <- 12 / (pmax(0, (nrow(ws) - 80) * .1) + 
-    pmax(0, (ncol(ws) - 100) * .2) + 1)
+  print("hi")
+  textSize <- 12 / (pmax(pmax(0, (nrow(ws) - 30) * .04),
+                         pmax(0, (ncol(ws) - 100) * .01)) + 1)
   print(textSize)
   g <- ggplot(ggdf, aes(x = col, y = row, label = letters))
   g <- g+ geom_text(aes(family = "Decima Mono"), size = textSize)
@@ -60,6 +61,7 @@ renderSolved <- function(ws, word, good_or_bad = "good") {
 
 renderClicked <- function(ws, word, click_x, click_y) {
   coordDt <- findWord(ws = ws, word = word)
+  print(coordDt)
   coordDtClicked <- coordDt[x == round(click_x)][y == round(click_y)]
   if (coordDtClicked[, .N] > 0) {
     renderSolved(ws, word, "good")
