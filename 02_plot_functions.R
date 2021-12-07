@@ -1,6 +1,20 @@
 # Visualization functions
 library(ggplot2)
 
+specifyTextSize <- function(ws) {
+  return(
+    12 / (pmax(pmax(0, (nrow(ws) - 30) * .04),
+               pmax(0, (ncol(ws) - 100) * .01)) + 1)
+  )
+}
+
+wsTheme <- theme(panel.background = element_blank(),
+                 axis.title.y = element_blank(),
+                 axis.ticks = element_blank(),
+                 text = element_text(family="Decima Mono", size = 12),
+                 panel.grid = element_blank(),
+                 axis.text=element_blank())
+
 renderUnsolved <- function(ws, word) {
   # creates a plot of the word search
   ggdf <- data.table(letters = unlist(ws %>% as.data.frame) %>%
@@ -8,20 +22,14 @@ renderUnsolved <- function(ws, word) {
                      col = sapply(1 : ncol(ws), rep, nrow(ws)) %>% 
                        as.data.frame %>% unlist,
                      row = rep(1 : nrow(ws), ncol(ws)))
-  textSize <- 12 / (pmax(0, (nrow(ws) - 80) * .1) + 
-    pmax(0, (ncol(ws) - 100) * .2) + 1)
-  print(textSize)
-  g <- ggplot(ggdf, aes(x = col, y = row, label = letters))
-  g <- g+ geom_text(aes(family = "Decima Mono"), size = textSize)
-  g <- g + xlab(paste0("85% of people can't find \"",
-                       word,"\".  Can you?"))
-  g <- g + theme(panel.background = element_blank(),
-                 axis.title.y = element_blank(),
-                 text = element_text(family="Decima Mono", size = 12),
-                 panel.grid = element_blank(),
-                 axis.text=element_blank())
-  g
-  
+  textSize <- specifyTextSize(ws)
+  return(
+    ggplot(ggdf, aes(x = col, y = row, label = letters)) + 
+      geom_text(aes(family = "Decima Mono"), size = textSize) + 
+      xlab(paste0("85% of people can't find \"",
+                  word,"\".  Can you?")) + 
+      wsTheme
+  )    
 }
 
 renderSolved <- function(ws, word, good_or_bad = "good") {
@@ -37,8 +45,9 @@ renderSolved <- function(ws, word, good_or_bad = "good") {
                      col = sapply(1 : ncol(ws), rep, nrow(ws)) %>% 
                        as.data.frame %>% unlist,
                      row = rep(1 : nrow(ws), ncol(ws)))
+  textSize <- specifyTextSize(ws)
   g <- ggplot(ggdf, aes(x = col, y = row, label = letters)) + 
-    geom_text(aes(family = "Decima Mono"), size = 12) + 
+    geom_text(aes(family = "Decima Mono"), size = textSize) + 
     xlab(paste0("85% of people can't find \"",
                 word,"\".  Can you?")) + 
     geom_label(data = data.table(x = runif(msg_n, min = 2, max = ncol(ws)), 
@@ -49,17 +58,14 @@ renderSolved <- function(ws, word, good_or_bad = "good") {
     geom_segment(aes(x = point1[1], xend = point2[1], 
                      y = point1[2], yend = point2[2]), 
                  color = "orange", size = 2, alpha = .1, lty = 1) + 
-    theme(panel.background = element_blank(),
-          axis.title.y = element_blank(),
-          text = element_text(family="Decima Mono", size = 12),
-          panel.grid = element_blank(),
-          axis.text=element_blank())
+    wsTheme
   g
   
 }
 
 renderClicked <- function(ws, word, click_x, click_y) {
   coordDt <- findWord(ws = ws, word = word)
+  print(coordDt)
   coordDtClicked <- coordDt[x == round(click_x)][y == round(click_y)]
   if (coordDtClicked[, .N] > 0) {
     renderSolved(ws, word, "good")

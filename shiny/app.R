@@ -5,12 +5,35 @@ sapply(list.files(".", full.names = TRUE), FUN = function(x) {
 
 library(shiny)
 
+render4kPlot <- function(a_plot) {
+  renderImage({
+    
+    outfile <- tempfile(fileext = '.png')
+    
+    # Generate the PNG
+    png(outfile, 
+        width = 3840, 
+        height = 2160,
+        res = 183)
+    print(a_plot)
+    dev.off()
+    
+    # Return a list containing the filename
+    list(src = outfile,
+         contentType = 'image/png',
+         width = "100%",
+         height = "100%",
+         alt = "The detail of the pattern is movement.")
+  }, deleteFile = TRUE)
+}
+
 # TODO list
 
-# - Configure Display
-# - a. Shrink text formula so that it has right numbers plugged in it (treat 2:1 as baseline)
-# - b. Try out forcing the resolution to be consistent by printing a temporary image and forcing the resolution
-
+# Backlog
+# - FIX BUGS
+# - make the x's and y's not have to be flipped when making the clicked image
+# - clicking "good" or "bad" assignment isn't working correctly - need to fix
+#     - need to figure out how many pixels until the plot starts in a ggplot object with math
 
 # - Configure gameplay
 #   a. incorporate board refresher logic
@@ -22,6 +45,8 @@ library(shiny)
 # - b. The rules of the game
 # - c. Intended applications (build upon the hypernormalization example, its crowd knowledge)
 
+# Optimized or 3840 x 2160
+# Recommended max reasonable ws: 600 * 220
 
 ui <- fluidPage(
   sidebarLayout(
@@ -33,12 +58,16 @@ ui <- fluidPage(
       numericInput("h", label = "Height: ", min = 1, max = 100, value = 10),
       
       textInput("word", label = "Word: ", value = "word"),
-      actionButton(inputId = "press_build", "Build!"), width = 1
+      actionButton(inputId = "press_build", "Build!"), width = 2
     ),
     mainPanel(
-      plotOutput("ws_output", click = "plot_click",
-                  height = "1000px"),
-      textOutput("timeleft"), width = 11
+      # plotOutput("ws_output", click = "plot_click",
+      #             height = "1000px"),
+      div(style = "background:red; height: 100vh", 
+          imageOutput("myImage", click = "plot_click", height = "100%")
+      ),
+      # imageOutput("myImage",  click = "plot_click"),
+      textOutput("timeleft"), width = 10
     )
   )
 )
@@ -53,33 +82,55 @@ server <- function(input, output) {
   #   paste("Time left: ", seconds_to_period(timer()))
   # })
   
-  inputData <- reactive({
+  inputData <- eventReactive(input$press_build, {
     
     # timer() uncomment this
-    print("The detail of the pattern is movement")
-
     ws <- buildHardWs(w = input$w, h = input$h, word = input$word)
-    list(ws = ws, word = input$word)
+    unsolvedPlot <- renderUnsolved(ws   = ws,
+                                   word = input$word)
+    list(ws = ws, word = input$word, 
+         unsolved = unsolvedPlot)
   })
   
   observeEvent(input$press_build, {
     output$ws_output <- renderPlot({
       # timer() uncomment this
       # invalidateLater(1000)
-      renderUnsolved(ws = inputData()$ws, word = input$word) + 
-        ggtitle(paste0((runif(n = 2) * 20) %>% round(0), collapse = ""))
+      inputData()$unsolved
     })
+    
+    # Plot the data ####
+    output$myImage <- render4kPlot(inputData()$unsolved)
   })
   
   observeEvent(input$plot_click, {
-    lat <- round(input$plot_click$x, 0)
-    long <- round(input$plot_click$y, 0)
-    print(c(lat, long))
-    output$ws_output <- renderPlot({
-      renderClicked(ws = inputData()$ws,
-                    word = inputData()$word,
-                    click_x = long, click_y = lat)
-    })
+    x    <- input$plot_click$x
+    y    <- input$plot_click$y
+    
+    xmax <- input$plot_click$domain$right
+    ymax <- input$plot_click$domain$bottom
+    
+    xpad <- xmax * .05
+    ypad <- ymax * .05
+    
+    
+    # These are flipped because of a bug in findWord() somewhere...
+    # click_y <- (input$w * (x / xmax)) + .5
+    # click_x <- (input$h * (ymax - y) / ymax) + .5
+    
+    click_x <- scales::rescale(x = x, from = c(xpad, xmax), to = c(1, ncol(inputData()$ws)))
+    click_y <- scales::rescale(x = y, from = c(ypad, ymax), to = c(nrow(inputData()$ws), 1))
+    
+    print(input$plot_click$domain)
+    print(c(input$plot_click$x, input$plot_click$y))
+    print(c(click_x %>% round, click_y %>% round));
+    output$myImage <- render4kPlot(
+      renderClicked(ws      = inputData()$ws,
+                    word    = inputData()$word,
+                    click_x = click_x,
+                    click_y = click_y
+      )
+    )
   })
   
 }
