@@ -3,6 +3,7 @@ library(data.table)
 library(stringr)
 library(magrittr)
 library(foreach)
+library(scales)
 library(iterators)
 library(shiny)
 

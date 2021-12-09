@@ -15,17 +15,14 @@ wRes <- min(hRes / vRes, 1) %>% `*`(100) %>% round %>% paste0("%")
 
 render4kPlot <- function(a_plot) {
   renderImage({
-    
     outfile <- tempfile(fileext = '.png')
-    
     # Generate the PNG
     png(outfile, 
         width  = hRes, 
         height = vRes,
-        res    = 183) # 183 
+        res    = 183) # 183
     print(a_plot)
     dev.off()
-    
     # Return a list containing the filename
     list(src = outfile,
          contentType = 'image/png',
@@ -34,8 +31,6 @@ render4kPlot <- function(a_plot) {
          alt = "The detail of the pattern is movement.")
   }, deleteFile = TRUE)
 }
-
-
 
 ui <- fluidPage(
   sidebarLayout(
@@ -50,27 +45,16 @@ ui <- fluidPage(
       actionButton(inputId = "press_build", "Build!"), width = 2
     ),
     mainPanel(
-      # plotOutput("ws_output", click = "plot_click",
-      #             height = "1000px"),
-      div(style = "background:red; height: 100vh", 
-          imageOutput("myImage", click = "plot_click", height = "100%",
-                      hover = "plot_hover")
-      ),
-      # imageOutput("myImage",  click = "plot_click"),
-      verbatimTextOutput("plotInfo"), width = 10
-    )
+      div(style = "background:red; height: 100vh; width", 
+          imageOutput("renderedWs", 
+                      click  = "plot_click", 
+                      height = "100%",
+                      hover  = "plot_hover")
+      ), width = 10)
   )
 )
-# I dont want the user input to be interesting, I want tactics to be interesting
-# This could mean having a designated person input what the crowd is screaming
+
 server <- function(input, output, session) {
-  
-  # timer <- reactiveTimer(5000) # uncomment this
-  
-  # Output the time left.
-  # output$timeleft <- renderText({
-  #   paste("Time left: ", seconds_to_period(timer()))
-  # })
   
   observe({
     # Massage inputs to avoid errors
@@ -79,7 +63,7 @@ server <- function(input, output, session) {
     howThin <- min(c(input$w, input$h))
     
     if (!is.na(howBig)) {
-      # Lower dimensions if unreasonably big
+      # Shrink size if unreasonably big
       if (input$w > 700) {
         updateNumericInput(session, inputId = "w", value = 700)
       }
@@ -93,7 +77,7 @@ server <- function(input, output, session) {
           updateNumericInput(session, inputId = "h", value = floor(tooBig / input$w))
         }
       }
-      # Shorten word if it wont fit in given dimensions
+      # Shrink word if too long to fit given dimensions
       if (nchar(input$word) > howThin) {
         updateTextInput(session, inputId = "word", 
                         value = substr(input$word, 1, howThin))
@@ -107,57 +91,28 @@ server <- function(input, output, session) {
   inputData <- eventReactive(input$press_build, {
     # Build the WS
     if (nchar(input$word) <= 2) {
+      # Override when word too small
       overrideWord <- "manlet"
       ws <- buildHardWs(w = 6, h = 6, word = overrideWord)
-      unsolvedPlot <- renderUnsolved(ws   = ws,
-                                     word = overrideWord)
-      list(ws = ws, word = overrideWord, 
+      unsolvedPlot <- renderUnsolved(ws = ws, word = overrideWord)
+      list(ws       = ws, 
+           word     = overrideWord, 
            unsolved = unsolvedPlot)
     } else {
       ws <- buildHardWs(w = input$w, h = input$h, word = input$word)
-      unsolvedPlot <- renderUnsolved(ws   = ws,
-                                     word = input$word)
-      list(ws = ws, word = input$word, 
+      unsolvedPlot <- renderUnsolved(ws   = ws, word = input$word)
+      list(ws       = ws, 
+           word     = input$word, 
            unsolved = unsolvedPlot)
     }
   })
   
   observeEvent(input$press_build, {
-    output$ws_output <- renderPlot({
-      # timer() uncomment this
-      # invalidateLater(1000)
-      inputData()$unsolved
-    })
-    
-    # Plot the data ####
-    output$myImage <- render4kPlot(inputData()$unsolved)
+    # Render unsolved wordsearch
+    output$renderedWs <- render4kPlot(inputData()$unsolved)
   })
   
-  output$plotInfo <- renderText({
-    xy_str <- function(e) {
-      if(is.null(e)) return("NULL\n")
-      paste0("x=", e$x, " y=", e$y, "\n")
-    }
-    
-    
-    x    <- input$plot_hover$x
-    y    <- input$plot_hover$y
-    
-    xmax <- input$plot_hover$domain$right
-    ymax <- input$plot_hover$domain$bottom
-    xpad <- xmax * .05
-    ypad <- ymax * .05
-    xmax <- input$plot_hover$domain$right - xpad
-    ymax <- input$plot_hover$domain$bottom - ypad
-    
-    click_x <- scales::rescale(x, from = c(xpad, xmax), to = c(1, ncol(inputData()$ws)))
-    click_y <- scales::rescale(y, from = c(ypad, ymax), to = c(nrow(inputData()$ws), 1))
-    
-    paste0("hover: ", xy_str(input$plot_hover), "\n",
-           "conversion_x: ", round(as.numeric(click_x), 2),
-           "; conversion_y:", round(as.numeric(click_y), 2))
-  })
-  
+  # Render solved wordsearch upon click
   observeEvent(input$plot_click, {
     x    <- input$plot_click$x
     y    <- input$plot_click$y
@@ -165,21 +120,22 @@ server <- function(input, output, session) {
     xmax <- input$plot_click$domain$right
     ymax <- input$plot_click$domain$bottom
     
-    xpad <- xmax * .05 # margin size in default theme
+    # Pad for margin size in default theme
+    xpad <- xmax * .05
     ypad <- ymax * .05
+    
     xmax <- input$plot_click$domain$right - xpad
     ymax <- input$plot_click$domain$bottom - ypad - 20 # axis label is 20 pixels in 4k
     
-    click_x <- scales::rescale(x = x, 
-                               from = c(xpad, xmax), 
-                               to = c(1, ncol(inputData()$ws))) %>%
-      as.numeric
-    click_y <- scales::rescale(x = y, 
-                               from = c(ypad, ymax), 
-                               to = c(nrow(inputData()$ws), 1)) %>%
-      as.numeric
-  
-    output$myImage <- render4kPlot(
+    # Rescale from pixels to coordinates
+    click_x <- as.numeric(scales::rescale(x = x, 
+                                          from = c(xpad, xmax), 
+                                          to = c(1, ncol(inputData()$ws))))
+    click_y <- as.numeric(scales::rescale(x = y, 
+                                          from = c(ypad, ymax), 
+                                          to = c(nrow(inputData()$ws), 1)))
+    # Render
+    output$renderedWs <- render4kPlot(
       renderClicked(ws      = inputData()$ws,
                     word    = inputData()$word,
                     click_x = click_y,
