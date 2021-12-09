@@ -4,6 +4,8 @@ library(stringr)
 library(magrittr)
 library(foreach)
 library(iterators)
+library(shiny)
+
 
 buildInitialWs <- function(w, h, word) {
   # Creates an initial [h x w] wordsearch that the string word may or may not be in

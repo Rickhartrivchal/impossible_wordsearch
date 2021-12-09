@@ -9,9 +9,10 @@ specifyTextSize <- function(ws) {
 }
 
 wsTheme <- theme(panel.background = element_blank(),
+                 # axis.title.y = element_blank(),
                  axis.title.y = element_blank(),
                  axis.ticks = element_blank(),
-                 text = element_text(family="Decima Mono", size = 12),
+                 text = element_text(family="Decima Mono", size = 20),
                  panel.grid = element_blank(),
                  axis.text=element_blank())
 
