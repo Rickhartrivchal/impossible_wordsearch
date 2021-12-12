@@ -60,15 +60,17 @@ server <- function(input, output, session) {
     # Massage inputs to avoid errors
     howBig  <- input$w * input$h
     tooBig  <- 150000
+    tooWide <- 700
+    tooTall <- 250
     howThin <- min(c(input$w, input$h))
     
     if (!is.na(howBig)) {
       # Shrink size if unreasonably big
-      if (input$w > 700) {
-        updateNumericInput(session, inputId = "w", value = 700)
+      if (input$w > tooWide) {
+        updateNumericInput(session, inputId = "w", value = tooWide)
       }
-      if (input$h > 250) {
-        updateNumericInput(session, inputId = "h", value = 250)
+      if (input$h > tooTall) {
+        updateNumericInput(session, inputId = "h", value = tooTall)
       }
       if (howBig > tooBig) {
         if (input$w > input$h) {

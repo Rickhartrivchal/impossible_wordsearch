@@ -7,10 +7,15 @@ library(scales)
 library(iterators)
 library(shiny)
 
+splitWord <- function(word) {
+  # Helper function to split word into character vector
+  return(
+    strsplit(tolower(word), split = "")[[1]]
+  )
+}
 
-buildInitialWs <- function(w, h, word) {
-  # Creates an initial [h x w] wordsearch that the string word may or may not be in
-  draws <- unique(strsplit(tolower(word), split = "")[[1]])
+buildInitialWs <- function(w, h, draws) {
+  # Creates an initial [h x w] wordsearch that may or may not contain the input word
   return(
     as.matrix(
       replicate(w, sample(draws, h, rep = T))
@@ -21,7 +26,7 @@ buildInitialWs <- function(w, h, word) {
 addWordToWs <- function(ws, word) {
   # Randomly adds word to the wordsearch
   # 1. 50/50 chance it will be forwards or backwards
-  # 2. ~25% chance it will show up vert/horizontal/fdiag/bdiag depends on dimensions
+  # 2. ~25% chance it will show up vert/horizontal/fdiag/bdiag, but depends on dimensions
   #    but should be more or less even distribution
   
   # Generate all maps
@@ -32,7 +37,8 @@ addWordToWs <- function(ws, word) {
   
   # Make a list of all strings 
   candidateStrings  <- 
-    lapply(seq_along(matrixMaps), # indices not matrixMaps for passing name + value together
+    # Passing indices and not matrixMaps itself to get name + value together
+    lapply(seq_along(matrixMaps), 
            FUN = function(types, maps, i) {
              map  <- maps[[i]]
              type <- types[i]
@@ -49,15 +55,15 @@ addWordToWs <- function(ws, word) {
     .[, w := nchar(old_string)]
   
   # Flip a coin for reversing word's characters (wordChars)
-  wordChars <- strsplit(word, "")[[1]]
+  wordChars <- splitWord(word)
   if (round(runif(1)) == 1) {wordChars <- rev(wordChars)}
   
-  # Randomly choose string + starting position
+  # Randomly choose string + starting position to get indices
   chosenString <- candidateStrings[sample(.N, 1, prob = w)]
   chosenStart  <- sample(chosenString$w - nchar(word) + 1, 1)
   chosenEnd    <- chosenStart + length(wordChars) - 1 
   
-  # Find the x- and y-coordinates of the chosen line
+  # Find the x- and y-coordinates of the chosen indices
   chosenMap <- matrixMaps[[chosenString$type]]
   x_list    <- split(row(ws), chosenMap)[[chosenString$pos]][chosenStart : chosenEnd]
   y_list    <- split(col(ws), chosenMap)[[chosenString$pos]][chosenStart : chosenEnd]
@@ -72,8 +78,7 @@ addWordToWs <- function(ws, word) {
 }
 
 findWord <- function(ws, word) {
-  # outputs a data.table of x and y matrix coordinates where word appears
-  # TODO: testing, "wowow" for word "wow", test to make sure word is complete
+  # Returns data.table of x and y matrix coordinates where word appears
   
   matrixMaps <- list(horiz_mat  = nrow(ws) - row(ws),
                      vert_mat   = ncol(ws) - col(ws),
@@ -123,26 +128,6 @@ findWord <- function(ws, word) {
     unique
 }
 
-drawWs <- function(ws, word) {
-  # creates a plot of the word search
-  ggdf <- cbind.data.frame(letters = unlist(ws %>% as.data.frame) %>%
-                             toupper,
-                           row = sapply(1 : nrow(ws), rep, ncol(ws)) %>% 
-                             as.data.frame %>% unlist,
-                           col = rep(1 : ncol(ws), nrow(ws)))
-  g <- ggplot(ggdf, aes(x = col, y = row, label = letters))
-  g <- g+ geom_text(aes(family = "Decima Mono"))
-  g <- g + xlab(paste0("85% of people can't find \"",
-                       word,"\".  Can you?"))
-  g <- g + theme(panel.background = element_blank(),
-                 axis.title.y = element_blank(),
-                 text = element_text(family="Decima Mono", size = 8),
-                 panel.grid = element_blank(),
-                 axis.text=element_blank())
-  g
-  
-}
-
 buildImpossibleWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
   
   iter_n <- 1
@@ -155,9 +140,8 @@ buildImpossibleWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
     }
     return(ws)
   }
-  
-  ws <- buildInitialWs(w, h, word)
-  draws <- unique(sample(strsplit(tolower(word),split=""))[[1]])
+  draws <- splitWord(word)
+  ws <- buildInitialWs(w, h, draws)
   coordDt <- findWord(ws, word)
   while (nrow(coordDt) > 0 & iter_n < 100) {
     # re-shuffle the remaining coords
@@ -192,8 +176,8 @@ buildHardWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
   
   # Initialize word search
   iter_n  <- 1
-  ws      <- buildInitialWs(w, h, word)
-  draws   <- unique(sample(strsplit(tolower(word),split=""))[[1]])
+  draws   <- splitWord(word)
+  ws      <- buildInitialWs(w, h, draws)
   coordDt <- findWord(ws, word)
   
   # The while loop will keep going until it shows up exactly once
@@ -236,9 +220,8 @@ if (FALSE) {
   word <- "Buster"
   w    <- 50
   h    <- 50
-  ws   <- buildInitialWs(w = w, h = h, word = word)
+  ws   <- buildInitialWs(w = w, h = h, word = splitWord(word))
   microbenchmark(coordDt <- findWord(ws, word), times = 10)
   microbenchmark(test1 <- buildImpossibleWs(w, h, word), times = 10)
   test2 <- buildHardWs(w, h, word)
-  drawWs(test2, word)
 }
