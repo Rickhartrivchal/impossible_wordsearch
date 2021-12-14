@@ -88,7 +88,13 @@ server <- function(input, output, session) {
     
 
     
-    })
+  })
+  
+  EventTime <- Sys.time() + 60
+  output$eventTimeRemaining <- renderText({
+    invalidateLater(1000, session)
+    paste0(round(difftime(EventTime, Sys.time(), units='secs')), " seconds left")
+  })
   
   inputData <- eventReactive(input$press_build, {
     # Build the WS
