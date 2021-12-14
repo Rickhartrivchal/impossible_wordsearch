@@ -1,5 +1,5 @@
 # Impossible Wordsearch
-Impossible Wordsearch is a shiny app for building wordsearches of custom dimension and content.
+Impossible Wordsearch is a shiny app for building wordsearches of custom dimension and content. 
 
 # TODO list (immediate)
 
@@ -12,7 +12,7 @@ Impossible Wordsearch is a shiny app for building wordsearches of custom dimensi
 - a. Explain the logic of how the word searches get built
 - b. The rules of the game
 - c. Intended applications (build upon the hypernormalization example, its crowd knowledge)
-
+- d. add a toggle for mobile dimensions/4k dimensions
 
 # Ideas for iteration:
 - instead of making one board, make a sequence of boards that reveal over time the positin

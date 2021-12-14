@@ -6,9 +6,10 @@ sapply(list.files(".", full.names = TRUE), FUN = function(x) {
 # Optimized or 3840 x 2160
 
 # optimized for 3840 x 2160
-# 48- * 853 for mobile
-hRes <- 3840 # 3840
-vRes <- 2160 # 2160
+# To do mobile, do ( ) numbers
+hRes <- 3840 # 3840 (48)
+vRes <- 2160 # 2160 (853)
+axisLabelPixels <- 20 # 20 (???)
 
 # 480 x 853 for mobile - then update wRes needed
 wRes <- min(hRes / vRes, 1) %>% `*`(100) %>% round %>% paste0("%")
@@ -85,15 +86,6 @@ server <- function(input, output, session) {
                         value = substr(input$word, 1, howThin))
       }
     }
-    
-
-    
-  })
-  
-  EventTime <- Sys.time() + 60
-  output$eventTimeRemaining <- renderText({
-    invalidateLater(1000, session)
-    paste0(round(difftime(EventTime, Sys.time(), units='secs')), " seconds left")
   })
   
   inputData <- eventReactive(input$press_build, {
@@ -150,6 +142,7 @@ server <- function(input, output, session) {
                     click_y = click_x
       )
     )
+
   })
   
 }
