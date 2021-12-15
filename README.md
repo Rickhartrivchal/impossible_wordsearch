@@ -2,6 +2,10 @@
 
 Impossible Wordsearch is a Shiny application for building wordsearches of custom dimension and content. It is capable of building wordsearches larger than the Guinness Book of World Records' largest wordsearch claimant of 150,000 characters, though in its current implementation it can only accept one word as an input.
 
+# Example 1
+(./examples/ex1.jpg)
+[!solution](./examples/ex1_solved.jpg)
+
 # Instructions
 
 Using the tool is as simple as running any Shiny application. The user may select the word they want to put in the wordsearch and the desired vertical and horizontal dimensions. Once the wordsearch is generated, the user is free to search for the word as long as they wish. If the user clicks on the wordsearch where they think the word is, the location will be revealed and they will know if they were correct.
