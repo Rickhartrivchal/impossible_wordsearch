@@ -66,7 +66,6 @@ renderSolved <- function(ws, word, good_or_bad = "good") {
 
 renderClicked <- function(ws, word, click_x, click_y) {
   coordDt <- findWord(ws = ws, word = word)
-  print(coordDt)
   coordDtClicked <- coordDt[x == round(click_x)][y == round(click_y)]
   if (coordDtClicked[, .N] > 0) {
     renderSolved(ws, word, "good")

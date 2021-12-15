@@ -146,9 +146,7 @@ buildImpossibleWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
   while (nrow(coordDt) > 0 & iter_n < 100) {
     # re-shuffle the remaining coords
     coordDt <- findWord(ws, word)
-    
-    # print(paste0("Iteration ", iter_n, ". Word found at ", nrow(coordDt), " locations."))
-    wsPopulation <- foreach(i = iter(1 : pop_size)) %do% {
+        wsPopulation <- foreach(i = iter(1 : pop_size)) %do% {
       redrawCoords(ws, coordDt, draws)
     }
     wsSize <- lapply(wsPopulation, FUN = findWord, word = word) %>%
@@ -157,7 +155,6 @@ buildImpossibleWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
     # Pick the best one and move on
     ws <- wsPopulation[[which.min(wsSize)]]
     coordDt <- findWord(ws, word)
-    # print(ws)
     iter_n <- iter_n + 1
   }
   return(ws)
@@ -202,7 +199,6 @@ buildHardWs <- function(w, h, word, pop_size = 5, redraw_size = 100) {
       ws <- wsPopulation[[which.min(ifelse(wsSize == 0, 999, wsSize))]]
     }
     coordDt <- findWord(ws, word)
-    # print(ws)
 
     iter_n <- iter_n + 1
   }

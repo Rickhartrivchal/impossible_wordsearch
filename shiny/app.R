@@ -5,29 +5,39 @@ sapply(list.files(".", full.names = TRUE), FUN = function(x) {
 
 # Optimized or 3840 x 2160
 
-# optimized for 3840 x 2160
-# To do mobile, do ( ) numbers
-hRes <- 3840 # 3840 (48)
-vRes <- 2160 # 2160 (853)
-axisLabelPixels <- 20 # 20 (???)
+returnPlotDimensions <- function(display_type = "Standard") {
+  if (display_type == "Standard") {
+    output <- list(hRes = 3840,
+                   vRes = 2160,
+                   res  = 183)
+  } else { # mobile format
+    output <- list(hRes = 630,
+                   vRes = 1200,
+                   res  =  80)
+  }
+  output$wRes <- min(output$hRes / output$vRes, 1)
+  output$wResChar <- output$wRes %>% `*`(100) %>% round %>% paste0("%")
+  return(
+    output
+  )
+}
 
-# 480 x 853 for mobile - then update wRes needed
-wRes <- min(hRes / vRes, 1) %>% `*`(100) %>% round %>% paste0("%")
-
-render4kPlot <- function(a_plot) {
+render4kPlot <- function(a_plot, type = "Standard") {
+  
+  plotDims <- returnPlotDimensions(type)
   renderImage({
     outfile <- tempfile(fileext = '.png')
     # Generate the PNG
     png(outfile, 
-        width  = hRes, 
-        height = vRes,
-        res    = 183) # 183
+        width  = plotDims$hRes, 
+        height = plotDims$vRes,
+        res    = plotDims$res) 
     print(a_plot)
     dev.off()
     # Return a list containing the filename
     list(src = outfile,
          contentType = 'image/png',
-         width = wRes,
+         width = plotDims$wResChar,
          height = "100%",
          alt = "The detail of the pattern is movement.")
   }, deleteFile = TRUE)
@@ -37,8 +47,8 @@ ui <- fluidPage(
   sidebarLayout(
     
     sidebarPanel(
-      radioButtons(inputId = "game_type", choices = c("custom", "adaptive"),
-                   label = "Select game type:"),
+      radioButtons(inputId = "display_type", choices = c("Standard", "Mobile"),
+                   label = "Sizing:"),
       numericInput("w", label = "Width: ", min = 1, max = 100, value = 10),
       numericInput("h", label = "Height: ", min = 1, max = 100, value = 10),
       
@@ -46,7 +56,7 @@ ui <- fluidPage(
       actionButton(inputId = "press_build", "Build!"), width = 2
     ),
     mainPanel(
-      div(style = "background:red; height: 100vh; width", 
+      div(style = "height: 100vh; width", 
           imageOutput("renderedWs", 
                       click  = "plot_click", 
                       height = "100%",
@@ -109,7 +119,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$press_build, {
     # Render unsolved wordsearch
-    output$renderedWs <- render4kPlot(inputData()$unsolved)
+    output$renderedWs <- render4kPlot(inputData()$unsolved, type = input$display_type)
   })
   
   # Render solved wordsearch upon click
@@ -124,7 +134,9 @@ server <- function(input, output, session) {
     xpad <- xmax * .05
     ypad <- ymax * .05
     
-    xmax <- input$plot_click$domain$right - xpad
+    xSpan <- input$plot_click$domain$right * returnPlotDimensions(input$display_type)$wRes
+    
+    xmax <- xSpan - xpad
     ymax <- input$plot_click$domain$bottom - ypad - 20 # axis label is 20 pixels in 4k
     
     # Rescale from pixels to coordinates
@@ -140,7 +152,7 @@ server <- function(input, output, session) {
                     word    = inputData()$word,
                     click_x = click_y,
                     click_y = click_x
-      )
+      ), type = input$display_type
     )
 
   })
